@@ -29,9 +29,56 @@ except MySQLdb.Error:
 # Turn the raw info into an insert statement
 #######################################################
 
-runnum = #placeholder
+#define variables needed to go in database
+runnum = 0
+start_time = ""
+end_time = ""
+target = ""
+sieve = 0
+raster = ""
+beam_energy = 0.0
+momentum = 0.0
+angle = 0.0
+off_x = 0.0
+off_y = 0.0
+off_z = 0.0
+comment = ""
+insert_query = ""
 
-insert_query = #placeholder
+with open("sql.dat","r") as file:
+    data = file.readlines()
+
+#Loop over the lines looking for keywords to denote which variable is listed
+for line in data:
+    words = line.split()
+    if words[0]=="runnum":
+        runnum = words[1]
+    elif words[0]=="start_time":
+        start_time = words[1]
+    elif words[0]=="end_time":
+        end_time = words[1]
+    elif words[0]=="target":
+        target = words[1]
+    elif words[0]=="sieve":
+        sieve = words[1]
+    elif words[0]=="raster":
+        raster = words[1]
+    elif words[0]=="beam_energy":
+        beam_energy = words[1]
+    elif words[0]=="momentum":
+        momentum = words[1]
+    elif words[0]=="angle":
+        angle = words[1]
+    elif words[0]=="off_x":
+        off_x = words[1]
+    elif words[0]=="off_y":
+        off_y = words[1]
+    elif words[0]=="off_z":
+        off_z = words[1]
+    elif words[0]=="comment"
+        for com in words:
+            comment = comment + com
+
 
 #######################################################
 # Execute the insert statment
