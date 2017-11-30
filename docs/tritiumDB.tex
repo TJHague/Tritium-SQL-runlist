@@ -1,0 +1,41 @@
+\documentclass[10pt]{article}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+\begin{document}
+
+To connect from an aonl machine:
+\begin{verbatim}
+mysql -u triton -p -h halladb triton
+\end{verbatim}
+
+Code used to create current table
+
+\begin{verbatim}
+CREATE TABLE EXPrunlist(
+   run_number INT UNSIGNED NOT NULL,
+   start_time DATETIME,
+   end_time DATETIME,
+   target TINYTEXT,
+   raster_x FLOAT(3,2),
+   raster_y FLOAT(3,2),
+   beam_energy FLOAT(10,4),
+   momentum_setting FLOAT(10,10),
+   angle FLOAT(8,6),
+   prescale_1 INT UNSIGNED,
+   prescale_2 INT UNSIGNED,
+   prescale_3 INT UNSIGNED,
+   prescale_4 INT UNSIGNED,
+   prescale_5 INT UNSIGNED,
+   prescale_6 INT UNSIGNED,
+   prescale_7 INT UNSIGNED,
+   prescale_8 INT UNSIGNED,
+   comment BLOB,
+   PRIMARY KEY ( run_number )
+);
+\end{verbatim}
+
+In this, EXP should be replaced with an experiment tag. These will be SRC, MARATHON, EP, and EK. 
+
+\end{document}

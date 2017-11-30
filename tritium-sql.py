@@ -36,7 +36,7 @@ runnum = runnum.rstrip() #Removes \n end of line character and any trailing whit
 runnum_file.close()
 
 #prep a query to request EPICS variables. Change the third value for a new request
-caget_query = ['/adaqfs/home/adaq/scrips/caget','-t','']
+caget_query = ['/adaqfs/home/adaq/scripts/caget','-t','']
 
 start_time = ""
 end_time = ""
