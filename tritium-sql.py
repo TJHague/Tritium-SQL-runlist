@@ -35,6 +35,8 @@ runnum = runnum_file.readline()
 runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
 runnum_file.close()
 
+run_type = ""
+
 #prep a query to request EPICS variables. Change the third value for a new request
 caget_query = ['/adaqfs/home/adaq/scripts/caget','-t','']
 
@@ -46,8 +48,8 @@ caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.
 target, err = caget.communicate() #returns the output and error status
 target = target.rstrip()
 
-sieve = 0
-raster = ""
+raster_x = 0
+raster_y = 0
 
 caget_query[2]='MMSHLAE'
 caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
@@ -70,9 +72,14 @@ caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.
 angle, err = caget.communicate()
 angle = angle.rstrip()
 
-off_x = 0.0
-off_y = 0.0
-off_z = 0.0
+prescaleT1
+prescaleT2
+prescaleT3
+prescaleT4
+prescaleT5
+prescaleT6
+prescaleT7
+prescaleT8
 
 #For comment, need to parse RUN_INFO_L.TITLE_COL line 3 after comment_text=
 comment = ""
