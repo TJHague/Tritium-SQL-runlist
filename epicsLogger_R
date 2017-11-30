@@ -1,0 +1,441 @@
+#!/bin/ksh
+#
+#  Script to get EPICS data periodically.  The time period will depend
+#  on the sleep commands here but also on any delays caused by missing
+#  EPICS channels (e.g. a computer is off).
+#
+#  Before adding anything, make sure 'caget' works at the command
+#  line and you know what you are doing !!!
+# 
+#  July 04 -- RWM   Added P0rb (readback of momentum setting) and
+#                   Hac*_VMIC1182:0_Ch17
+#
+#  July 06 -- modified by Emily McCullough <emily@jlab.org>
+#             for LEDEX. Added Magnet variables (L & R) and
+#             anything else marked with LEDEX. 
+#
+#  Nov 06  -- Modified by Elena Khrosinkova <hrosinko@jlab.org>
+#             for E04-018. Added HV variables (read ones) and temperatures
+#             pressures of the tatget. Add var for bcm, removed loops for
+#             epicslist3             
+#
+
+#
+# TESTPRINT is to debug that things work.
+#
+# 033107      -- Elena Khrosinkova: Added again HV for E04018.
+#
+#  Oct 07     -- Modified by Vince Sulkosky <vasulk@jlab.org>
+#                for E05-110. Updated HV variables for left and right HRS.
+#             
+#  Mar 08     -- Modified by Vince Sulkosky <vasulk@jlab.org>
+#                for E04-007. Turned off L-HRS HV variables and added BigBite
+#                magnet variables to list5.  Added G0 Helicity read vars.
+#                to list4.
+#
+#  Sep 25, 08 -- Modified by V. Sulkosky for E06-010 (Tranversity).
+#                Turned off R-HRS and cryotarget variables.
+#                Added pol. 3He target variables.
+#
+#  TURNON is a flag used to remove epicslists from the output.
+#
+# Oct 16, 2008 -- Modified by V. Sulkosky for Transversity.  Added pol. 3He
+#                 target spin variables.
+#  
+# Feb 5, 2009 -- Modified by V. Sulkosky for d2n.  Added target OTR variables.
+#
+# 01 Nov 09   -- Modified by R.Silwal for PVDIS. 
+#                Cleaned up the epicslist, slightly
+#                Modified the scripts to include TURNON1..11, removed TURNON
+#                The old scripts is saved as epicsLogger_31Oct09
+#                Turned on 1,2,3,4,5,6,7,10
+#
+# 13 Dec 11   -- Modified by T.Badman for g2p. Added septum current,
+#                temporary target status, updated BPM variables.
+#
+# 10 Mar 14   -- I went back to just "epicsLogger" instead of having
+#                multiple nearly-identical copies like epicsLoggerN, N=1,2,3..
+#                Remember, epicsLogger should be slow and fastEpicsLogger
+#                is fast; the slowness is governed by the sleep command.
+
+
+TESTPRINT=0
+
+# beamline EPICS addresses
+EPICS_CA_ADDR_LIST="129.57.255.11"
+
+EPICS_DIR=$HOME/epics   
+#
+SCRIPTS=$HOME/scripts
+
+CAGET=$SCRIPTS/caget    
+
+pidfile=$EPICS_DIR/.epicsLoggerpid_R
+epicsfile1=$EPICS_DIR/halla1_r.epics
+
+# To turn on/off (1/0) the parameter logs
+# epicslist last checked on 04Nov09, rupesh
+TURNON1=1 # BPMs, OK
+TURNON2=1 # BCMs, OK
+TURNON3=1 # Target variables, OK
+TURNON4=0 # Injector/Polarization Variables, OK
+TURNON5L=1 # Magnet and VDC stuffs, OK
+TURNON5R=1 # Magnet and VDC stuffs, OK
+TURNON5VDC=1 # Magnet and VDC stuffs, OK
+TURNON6=0 # Energy/momentum, Arc and FFB variables, OK
+TURNON7=0 # Left arm HV and pol He3 (He3 blanked out, does not work) , HV OK
+TURNON8=0 # Right arm HV and pol He3 (He3 blanked out, does not work), HV doesnt work
+TURNON9=0 # Right Shower HV variables for CSR, does not work
+TURNON10=0 # Compton variables, OK
+TURNON11=0 # FPP file being read from fpp_e03101, OK, dont need for PVDIS
+TURNON12=0 # DVCS Calo DC current 
+TURNON13=0 # Septum Right/Left current readback
+TURNON14=0 # Temporary Target Status
+#
+# Readout the following from Hall A 
+#
+#HacR_Q1_DF853:AD8	Right Arm Q1 power supply current
+#HacR_Q1_LS450:FIELD?	Right Arm Q1 gauss meter
+#HacR_Q1_P0rb           Right Arm Q1 momentum setting readback
+#HacR_Q2_HP3458A:IOUT	Right Arm Q2 power supply current
+#HacR_Q2_LS450:FIELD?	Right Arm Q2 gauss meter
+#HacR_Q2_P0rb           Right Arm Q2 momentum setting readback
+#HacR_D1_HP3458A:IOUT	Right Arm D1 power supply current
+#HacR_D1_VMIC1182:0_Ch17  Right Arm D1 power supply current
+#HacR_D1_NMR:SIG	Right Arm D1 NMR
+#HacR_D1_NMR:SIGLCK	Right Arm D1 NMR Lock Status
+#HacR_D1_P0rb           Right Arm D1 momentum setting readback
+#HacR_D_LS450:FLD_DATA  Right Arm D1 gauss meter
+#HacR_Q3_HP3458A:IOUT	Right Arm Q3 power supply current
+#HacR_Q3_LS450:FIELD?	Right Arm Q3 gauss meter
+#HacR_Q3_P0rb           Right Arm Q3 momentum setting readback
+#
+#HacL_Q1_DF853:AD8	Left Arm Q1 power supply current
+#HacL_Q1_LS450:FIELD?	Left Arm Q1 gauss meter
+#HacL_Q1_P0rb           Left Arm Q1 momentum setting readback
+#HacL_Q2_HP3458A:IOUT	Left Arm Q2 power supply current
+#HacL_Q2_LS450:FIELD?	Left Arm Q2 gauss meter
+#HacL_Q2_P0rb           Left Arm Q2 momentum setting readback
+#HacL_D1_HP3458A:IOUT	Left Arm D1 power supply current
+#HacL_D1_NMR:SIG		Left Arm D1 NMR
+#HacL_D1_NMR:SIGLCK	Left Arm D1 NMR Lock Status
+#HacL_D1_VMIC1182:0_Ch17  Left Arm D1 power supply current
+#HacL_D1_P0rb           Left Arm D1 momentum setting readback
+#HacL_D_LS450:FLD_DATA  Left Arm D1 gauss meter
+#HacL_Q3_HP3458A:IOUT	Left Arm Q3 power supply current
+#HacL_Q3_LS450:FIELD?	Left Arm Q3 gauss meter
+#HacL_Q3_P0rb           Left Arm Q3 momentum setting readback
+# HacR_COL:ENC          Right Arm Arm Collimator Position
+# HacL_COL:ENC          Left Arm Arm Collimator Position
+#HacR_HPE1313A:0_Ch58
+#HacR_HPE1313A:0_Ch55
+#HacR_HPE1313A:0_Ch54
+#HacL_HPE1313A:0_Ch58
+#HacL_HPE1313A:0_Ch55
+#HacL_HPE1313A:0_Ch54
+# add mkj 12/17/99
+# HacR_HPM_LVDT:VALr HacR_VPM_LVDT:VALr 
+# HacR_alignROLL HacR_alignPITCH HacR_alignHPT
+# HacL_HPM_LVDT:VALr HacL_VPM_LVDT:VALr 
+# HacL_alignROLL HacL_alignPITCH HacL_alignHPT
+#hac_bcm_A1
+#hac_bcm_A2
+#hac_bcm_average         Average current of the two cavities
+#hac_unser_current       Current on Unser monitor
+#hac_bcm_dvm1_current    Current on Upstream bcm
+#hac_bcm_dvm2_current    Current on Downstream bcm
+#
+# MSW1C00M               HAPPEX sweeper power supply current
+# MSW1C00VM              HAPPEX sweeper power supply voltage
+#
+# added lvdt stuff back in for super-rosenbluth
+# BR: septum stuff added
+# BR: added waterfall target (HAWF...) and removed it (see 26apr04 save dir)
+# BR: added RICH HV
+# BR: fast feedback status
+# 
+# For non-standard analysis of 1C12 OTR at low currents, pull out:
+# hla:otr_xsigma   -- fit to size in X (mm)
+# hla:otr_xsig_avg -- average of last 10 fits (mm)
+# hla_otr_counter  -- status of fit: if >20 then program crashed
+#
+# BPMs
+epicslist1="IPM1C08.XPOS IPM1C10 IPM1C10.XPOS IPM1C10.YPOS IPM1C12 IPM1C12.XPOS IPM1C12.YPOS IPM1C14 IPM1C14.XPOS IPM1C14.YPOS IPM1C16 IPM1C16.XPOS IPM1C16.YPOS IPM1C18 IPM1C18.XPOS IPM1C18.YPOS IPM1C20 IPM1C20.XPOS IPM1C20.YPOS IPM1H01 IPM1H01.XPOS IPM1H01.YPOS IPM1H04A.XPOS IPM1H04A.YPOS IPM1H04E.XPOS IPM1H04E.YPOS IPM1H04A.XSOF IPM1H04A.YSOF IPM1H04E.XSOF IPM1H04E.YSOF IPM1H04A.XPOS IPM1H04A.YPOS IPM1H04E.XPOS IPM1H04E.YPOS IPM1H04.XSOF IPM1H04.YSOF IPM1H04.XPOS IPM1H04.YPOS"
+
+# BCM currents 
+## old Feb 4th 2016
+#epicslist2="hac_bcm_dvm1_read hac_bcm_dvm2_read hac_bcm_average hac_unser_current hac_bcm_dvm1_current hac_bcm_dvm2_current hac_bcm_A1 hac_bcm_A2 hac_bcm_A1sdev hac_bcm_A2sdev IBC0L02Current IBC3H00CRCUR4 hac_unser_read HA:K224:Current IBC1H00MAGA.RVAL IBC1H00MAGB.RVAL IBC1H00CURA IBC1H00CURB  IPM1H00XPMCW IPM1H00YPMCW"
+
+epicslist2="hac_bcm_dvm1_read hac_bcm_dvm2_read hac_bcm_average hac_unser_current hac_bcm_dvm1_current hac_bcm_dvm2_current hac_bcm_A1 hac_bcm_A2 hac_bcm_A1sdev hac_bcm_A2sdev IBC0L02Current IBC3H00CRCUR4 hac_unser_read HA:K224:Current IPM1H05XPM1HZ IPM1H05YPM1HZ"
+
+# Target variables
+epicslist3="haptPT_Encoder haptuWave_Freq haptRF_Freq haptNMR_Area haptPolarization haptPT_Position haptMagField haptMagnet_Curent haptVPT_3He haptVPT_4He haBDSSELECT haL1_Fan_Freq_R haL2_Fan_Freq_R haL3_Fan_Freq_R haBDSPOS.VAL haBDSPOS haLS218_1_T5 haLS218_1_T6 haLS218_1_T7 haL1_TI_HX_In_R haLS218_2_T5 haLS218_2_T6 haLS218_2_T7 haL2_TI_HX_In_R haLS218_3_T5 haLS218_3_T6 haLS218_3_T7 haL3_TI_HX_In_R haH2_P_Fill_Target_R haH2_P_Exhaust_R haD2_P_Fill_Target_R haD2_P_Exhaust_R haL1_hp_power_R haL2_hp_power_R haL3_hp_power_R"
+
+epicslist3="haBDSSELECT haL1_Fan_Freq_R haL2_Fan_Freq_R haL3_Fan_Freq_R haBDSPOS.VAL haBDSPOS haLS218_1_T5 haLS218_1_T6  haLS218_1_T7 haL1_TI_HX_In_R haLS218_2_T5 haLS218_2_T6 haLS218_2_T7 haL2_TI_HX_In_R  haLS218_3_T5 haLS218_3_T6 haLS218_3_T7 haL3_TI_HX_In_R haH2_P_Fill_Target_R haH2_P_Exhaust_R haD2_P_Fill_Target_R  haD2_P_Exhaust_R haL1_hp_power_R haL2_hp_power_R haL3_hp_power_R "
+
+
+# Injector helicity info: WienAngle, Helicity Mode ON/OFF Random/Toggle,
+#     Wien field, Laser attenuation Hall A,Laser power  Hall A ,
+#     Half-wave plate (off=out) ,rotating waveplate,Beam Half-wave plate (off=out)
+epicslist4="WienAngle IGL1I00OD16_5 IGL1I00DAC6 psub_aa_pos  IGL1I00DAC0 IGL1I00OD16_16 psub_pl_pos IGL1I00DI24_24M HELTSETTLEd HELTSTABLEd HELDELAYd HELPATTERNd HELCLOCKd HELFREQ"
+
+# L & BB magnet variables. HacL_COL:ENC
+epicslist5L="HacL_COL:ENC HacL_Q1_P0rb HacL_Q2_P0rb HacL_D1_P0rb HacL_Q3_P0rb HacL_Q1_LS450:FLD_DATA HacL_Q2_LS450:FLD_DATA HacL_D_LS450:FLD_DATA HacL_Q3_LS450:FLD_DATA MQ171LM HacL_Q2_HP3458A:IOUT HacL_D1_HP3458A:IOUT HacL_Q3_HP3458A:IOUT HacL_D1_NMR:SIG HacL_D1_NMR:SIGLCK MQ171Lr.B3 HacL_VMIC1182:0_Ch17 HacL_VMIC1182:0_Ch15 HacL_VMIC1182:0_Ch26 HacL_HPE1313A:0_Ch58 HacL_HPE1313A:0_Ch55 HacL_HPE1313A:0_Ch54 HacL_AglMrk HacL_AglVrn HacL_alignAGL"
+
+#R magnet variables.
+epicslist5R="HacR_COL:ENC HacR_Q1_LS450:FLD_DATA HacR_Q1_P0rb HacR_Q2_P0rb HacR_D1_P0rb HacR_Q3_P0rb HacR_VMIC1182:0_Ch17 HacR_D1_HP3458A:IOUT HacR_D1_NMR:SIG HacR_D1_NMR:SIGLCK HacR_D_LS450:FLD_DATA HacR_Q2_HP3458A:IOUT HacR_Q2_LS450:FLD_DATA HacR_Q3_HP3458A:IOUT HacR_Q3_LS450:FLD_DATA HacR_D_LS450:FLD_DATA HacR_VMIC1182:0_Ch26 MQ172RM MQ172Rr.B3 HacR_VMIC1182:0_Ch17 HacR_VMIC1182:0_Ch14 HacR_VMIC1182:0_Ch26 HacR_VMIC1182:0_Ch15  HacR_AglMrk HacR_AglVrn HacR_HPE1313A:0_Ch58 HacR_HPE1313A:0_Ch55 HacR_HPE1313A:0_Ch54"
+
+# HacR_HPM_LVDT:VALr  HacR_VPM_LVDT:VALr HacR_alignROLL HacR_alignAGL HacR_alignPITCH HacR_alignHPT
+
+#VDC variables.
+epicslist5VDC="HrsH_VDC_rCURTop HrsH_VDC_rCURBot HrsH_VDC_rHVTop HrsH_VDC_rHVBot HRSE_DTECTR_HPE1313A:0_Ch1 HRSE_DTECTR_HPE1313A:0_Ch3 HRSE_DTECTR_HPE1313A:0_Ch0 HRSE_DTECTR_HPE1313A:0_Ch2"
+
+# Energy/momentum variables, ARC energy, FFB variables
+epicslist6="MBSY1C MBSY1C.BDL Arc1_dpp Arc2_dpp MQA1H01RB.BDL MQM1H02RB.BDL MQO1H03RB.BDL MQO1H03ARB.BDL MBSY1C_energy MQA1H01 MQM1H02 MQO1H03 MQO1H03A MV_AI_DXPOS MV_AI_DXWID MV_AI_DYPOS MV_AI_DYWID MV_AI_XPOS MV_AI_XWID MV_AI_YPOS MV_AI_YWID  MBSY3C_energy halla_MeV hallc_MeV MBSY1C.BDL MBSY1C halla_MeV MBSY1C_energy HALLA:p HALLA:dpp FB_A:use_RF FB_A:status:mbbi2.B7   MQK1H01M MQO1H02M MQM1H02M MQO1H03M MQO1H03AM MQA1H04M IOR1H4AT"
+
+# Left Detector HV variables
+epicslist7=" MF7b1461_0ch0property.F MF7b1461_0ch1property.F MF7b1461_0ch2property.F MF7b1461_0ch3property.F MF7b1461_0ch4property.F MF7b1461_0ch5property.F MF7b1461_0ch6property.F MF7b1461_0ch7property.F MF7b1461_0ch8property.F MF7b1461_0ch9property.F MF7b1461_0ch10property.F MF7b1461_0ch11property.F MF7b1461_1ch0property.F MF7b1461_1ch1property.F MF7b1461_1ch2property.F MF7b1461_1ch3property.F MF7b1461_1ch4property.F MF7b1461_1ch5property.F MF7b1461_1ch6property.F MF7b1461_1ch7property.F MF7b1461_1ch8property.F MF7b1461_1ch9property.F MF7b1461_1ch10property.F MF7b1461_1ch11property.F MF7b1461_2ch0property.F MF7b1461_2ch1property.F MF7b1461_2ch2property.F MF7b1461_2ch3property.F MF7b1461_2ch4property.F MF7b1461_2ch5property.F MF7b1461_2ch6property.F MF7b1461_2ch7property.F MF7b1461_2ch8property.F MF7b1461_2ch9property.F MF7b1461_3ch0property.F MF7b1461_3ch1property.F MF7b1461_3ch2property.F MF7b1461_3ch3property.F MF7b1461_3ch4property.F MF7b1461_3ch5property.F MF7b1461_3ch6property.F MF7b1461_3ch7property.F MF7b1461_3ch8property.F MF7b1461_3ch9property.F MF7b1461_3ch10property.F MF7b1461_3ch11property.F MF7b1461_4ch0property.F MF7b1461_4ch1property.F MF7b1461_4ch2property.F MF7b1461_4ch3property.F MF7b1461_4ch4property.F MF7b1461_4ch5property.F MF7b1461_4ch6property.F MF7b1461_4ch7property.F MF7b1461_4ch8property.F MF7b1461_4ch9property.F MF7b1461_4ch10property.F MF7b1461_4ch11property.F MF7b1461_5ch0property.F MF7b1461_5ch1property.F MF7b1461_5ch2property.F MF7b1461_5ch3property.F MF7b1461_5ch4property.F MF7b1461_5ch5property.F MF7b1461_5ch6property.F MF7b1461_5ch7property.F MF7b1461_5ch8property.F MF7b1461_5ch9property.F MF7b1461_9ch0property.F MF7b1461_9ch1property.F MF7b1461_9ch2property.F MF7b1461_9ch3property.F MF7b1461_9ch4property.F MF7b1461_9ch5property.F MF7b1461_9ch6property.F MF7b1461_9ch7property.F MF7b1461_9ch8property.F MF7b1461_9ch9property.F MF7b1461_9ch10property.F MF7b1461_9ch11property.F MF7b1461_10ch0property.F MF7b1461_10ch1property.F MF7b1461_10ch2property.F MF7b1461_10ch3property.F MF7b1461_10ch4property.F MF7b1461_10ch5property.F MF7b1461_10ch6property.F MF7b1461_10ch7property.F MF7b1461_10ch8property.F MF7b1461_10ch9property.F MF7b1461_10ch10property.F MF7b1461_10ch11property.F MF7b1461_11ch0property.F MF7b1461_11ch1property.F MF7b1461_11ch2property.F MF7b1461_11ch3property.F MF7b1461_11ch4property.F MF7b1461_11ch5property.F MF7b1461_11ch6property.F MF7b1461_11ch7property.F MF7b1461_11ch8property.F MF7b1461_11ch9property.F MF7b1461_11ch10property.F MF7b1461_11ch11property.F"
+
+# haPolHe3_Spin_State haPolHe3_Flip_Sequence_ID haPolHe3_Flip_Count haPolHe3_EPR_ID haPolHe3_EPR_POL haPolHe3_Last_Flip_Start haPolHe3_Last_Flip_End haPolHe3_FLIP_NMR_PHASE haPolHe3_FLIP_NMR_Mag haPolHe3_FLIP_NMR_Pol HaGenTargSpin1 HaGenTargSpin2
+
+#  Right Detector HV variables  -- obsolete 
+epicslist8=" MF3b1461_1ch0property.F MF3b1461_1ch1property.F MF3b1461_1ch2property.F MF3b1461_1ch3property.F MF3b1461_1ch4property.F MF3b1461_1ch5property.F MF3b1461_1ch6property.F MF3b1461_1ch7property.F MF3b1461_1ch8property.F MF3b1461_1ch9property.F MF3b1 MF3b1461_1ch11property.F MF3b1461_2ch0property.F MF3b1461_2ch1property.F MF3b1461_2ch2property.F MF3b1461_2ch3property.F MF3b1461_2ch4property.F MF3b1461_2ch5property.F MF3b1461_2ch6property.F MF3b1461_2ch7property.F MF3b1461_2ch8property.F MF3b1461_2ch9property.F MF3b1461_2ch10property.F MF3b1461_2ch11property.F MF3b1461_4ch0property.F MF3b1461_4ch1property.F MF3b1461_4ch2property.F MF3b1461_4ch3property.F MF3b1461_4ch4property.F MF3b1461_4ch5property.F MF3b1461_4ch6property.F MF3b1461_4ch7property.F MF3b1461_4ch8property.F MF3b1461_4ch9property.F MF3b1461_4ch10property.F MF3b1461_4ch11property.F MF3b1461_5ch0property.F MF3b1461_5ch1property.F MF3b1461_5ch2property.F MF3b1461_5ch3property.F MF3b1461_5ch4property.F MF3b1461_5ch5property.F MF3b1461_5ch6property.F MF3b1461_5ch7property.F MF3b1461_5ch8property.F MF3b1461_5ch9property.F MF3b1461_5ch10property.F MF3b1461_5ch11property.F MF3b1461_7ch0property.F MF3b1461_7ch1property.F MF3b1461_7ch2property.F MF3b1461_7ch3property.F MF3b1461_7ch4property.F MF3b1461_7ch5property.F MF3b1461_7c MF3b1461_7ch7property.F MF3b1461_7ch8property.F MF3b1461_7ch9property.F MF3b1461_7ch10property.F MF3b1461_7ch11property.F MF3b1461_8ch0property.F MF3b1461_8ch1property.F MF3b1461_8ch2property.F MF3b1461_8ch3property.F MF3b1461_8ch4property.F MF3b1461_8ch5property.F MF3b1461_8ch6property.F MF3b1461_8ch7property.F MF3b1461_8ch8property.F MF3b1461_8ch9property.F MF3b1461_8ch10property.F MF3b1461_8ch11property.F MF3b1461_14ch0property.F MF3b1461_14ch1property.F MF3b1461_14ch2property.F MF3b1461_14ch3property.F MF3b1461_14ch4property.F MF3b1461_14ch5property.F MF3b1461_14ch6property.F MF3b1461_14ch7property.F MF3b1461_14ch8property.F MF3b1461_14ch9property.F"
+
+# haPolHe3_Spin_State haPolHe3_Flip_Sequence_ID haPolHe3_Flip_Count haPolHe3_EPR_ID haPolHe3_EPR_POL haPolHe3_Last_Flip_Start haPolHe3_Last_Flip_End haPolHe3_FLIP_NMR_PHASE haPolHe3_FLIP_NMR_Mag haPolHe3_FLIP_NMR_Pol HaGenTargSpin1 HaGenTargSpin2461_1ch10property.F
+
+# haPolHe3_Spin_State haPolHe3_Flip_Sequence_ID haPolHe3_Flip_Count haPolHe3_EPR_ID haPolHe3_EPR_POL haPolHe3_Last_Flip_Start haPolHe3_Last_Flip_End haPolHe3_FLIP_NMR_PHASE haPolHe3_FLIP_NMR_Mag haPolHe3_FLIP_NMR_Pol HaGenTargSpin1 HaGenTargSpin2h6property.F
+
+# Right Shower HV variables for CSR -- obsolete
+epicslist9=" MF1b1461_1ch0property.F MF1b1461_1ch1property.F MF1b1461_1ch2property.F MF1b1461_1ch3property.F MF1b1461_1ch4property.F MF1b1461_1ch5property.F MF1b1461_1ch6property.F MF1b1461_1ch7property.F MF1b1461_1ch8property.F MF1b1461_1ch9property.F MF1b1461_1ch10property.F MF1b1461_1ch11property.F MF1b1461_2ch0property.F MF1b1461_2ch1property.F MF1b1461_2ch2property.F MF1b1461_2ch3property.F MF1b1461_2ch4property.F MF1b1461_2ch5property.F MF1b1461_2ch6property.F MF1b1461_2ch7property.F MF1b1461_2ch8property.F MF1b1461_2ch9property.F MF1b1461_2ch10property.F MF1b1461_2ch11property.F MF1b1461_4ch0property.F MF1b1461_4ch1property.F MF1b1461_4ch2property.F MF1b1461_4ch3property.F MF1b1461_4ch4property.F MF1b1461_4ch5property.F MF1b1461_4ch6property.F MF1b1461_4ch7property.F MF1b1461_4ch8property.F MF1b1461_4ch9property.F MF1b1461_4ch10property.F MF1b1461_4ch11property.F MF1b1461_5ch0property.F MF1b1461_5ch1property.F MF1b1461_5ch2property.F MF1b1461_5ch3property.F MF1b1461_5ch4property.F MF1b1461_5ch5property.F MF1b1461_5ch6property.F MF1b1461_5ch7property.F MF1b1461_5ch8property.F MF1b1461_5ch9property.F MF1b1461_5ch10property.F MF1b1461_5ch11property.F MF1b1461_7ch0property.F MF1b1461_7ch1property.F MF1b1461_7ch2property.F MF1b1461_7ch3property.F MF1b1461_7ch4property.F MF1b1461_7ch5property.F MF1b1461_7ch6property.F MF1b1461_7ch7property.F MF1b1461_7ch8property.F MF1b1461_7ch9property.F MF1b1461_7ch10property.F MF1b1461_7ch11property.F MF1b1461_8ch0property.F MF1b1461_8ch1property.F MF1b1461_8ch2property.F MF1b1461_8ch3property.F MF1b1461_8ch4property.F MF1b1461_8ch5property.F MF1b1461_8ch6property.F MF1b1461_8ch7property.F MF1b1461_8ch8property.F MF1b1461_8ch9property.F MF1b1461_8ch10property.F MF1b1461_8ch11property.F MF1b1461_10ch0property.F MF1b1461_10ch1property.F MF1b1461_10ch2property.F MF1b1461_10ch3property.F MF1b1461_10ch4property.F MF1b1461_10ch5property.F MF1b1461_10ch6property.F"
+
+# (7) Compton 
+    
+#COMPTON_LASERP_si                               Laser power
+#COMPTON_PW1PCAV_ca                      Calculated power in cavity
+#COMPTON_PW2PCAV_ca                      Photodiode on table
+#COMPTON_Y1SS_ca                                 Laser X position on QPD 1
+#COMPTON_X1SS_ca                                 Laser Y position on QPD 1
+#COMPTON_Y2SS_ca                                 Laser X position on QPD 2
+#COMPTON_X2SS_ca                                 Laser Y position on QPD 2
+#COMPTON_XYSUM1_ca                               QPD 1 sum
+#COMPTON_XYSUM2_ca                               QPD 2 sum
+#COMPTON_POS1_si                                 Position set point for adjustable mirror 1 (either x or y)
+#COMPTON_POS3_si                                 Position set point for adjustable mirror 2 (either x or y)
+#COMPTON_LASERT_MIN                      Laser crystal minimum temperature (epics constant used for calculating temperature offsets)
+#COMPTON_LASERT_si                               Laser temperature set point
+#COMPTON_SU_POLAR_mo                     Polarisation set point of laser in cavity
+#COMPTON_SERVO_PDRai                     Signal reflected from cavity input mirror
+#COMPTON_SERVO_GAINao                    "Gain" of locking servo
+#COMPTON_SERVO_SEUILao                   "Tracking level (V)" of locking servo
+#COMPTON_SERVO_SLOWai                    Slow locking signal sent to laser
+#COMPTON_SERVO_FASTai                    Fast locking signal sent to laser
+#COMPTON_CAVPOLAR_ca                     Calculated polarisation in cavity
+#COMPTON_PW1R_S2_ca                      Signal of one polarisation state after Wollaston prism
+#COMPTON_PW1R_S1_ca                      Signal of other polarisation state after Wollaston prism
+#COMPTON_PVAL_Y_ao                               Step size for rotating half wave plate scan
+#COMPTON_CAVSLOW_bo                      Slow ramping of laser temperature when not locked (1 = on)
+#COMPTON_LASERT_RAMPDT           Extent of laser temperature slow ramp (degrees C)
+#COMPTON_CAVPLUSOFT_ca.B         Speed of laser temperature slow ramp up
+#COMPTON_CAVMOINSOFT_ca.B                Speed of laser temperature slow ramp down
+
+# Compton variables
+epicslist10="COMPTON_LASERP_si COMPTON_PW1PCAV_ca COMPTON_PW2PCAV_ca COMPTON_Y1SS_ca COMPTON_X1SS_ca COMPTON_Y2SS_ca COMPTON_X2SS_ca COMPTON_XYSUM1_ca COMPTON_XYSUM2_ca COMPTON_POS1_si COMPTON_POS3_si COMPTON_LASERT_MIN COMPTON_LASERT_si COMPTON_SU_POLAR_mo COMPTON_SERVO_PDRai COMPTON_SERVO_GAINao COMPTON_SERVO_SEUILao COMPTON_SERVO_SLOWai COMPTON_SERVO_FASTai COMPTON_CAVPOLAR_ca COMPTON_PW1R_S2_ca COMPTON_PW1R_S1_ca COMPTON_PVAL_Y_ao COMPTON_CAVSLOW_bo COMPTON_LASERT_RAMPDT COMPTON_CAVPLUSOFT_ca.B COMPTON_CAVMOINSOFT_ca.B"
+
+
+# DVCS Calorimeter DC current
+epicslist12="haVMI3128_1_AI1 haVMI3128_1_AI2 haVMI3128_1_AI3 haVMI3128_1_AI4 haVMI3128_1_AI5 haVMI3128_1_AI6 haVMI3128_1_AI7 haVMI3128_1_AI8 haVMI3128_1_AI9 haVMI3128_1_AI10 haVMI3128_1_AI11 haVMI3128_1_AI12 haVMI3128_1_AI13 haVMI3128_1_AI14 haVMI3128_1_AI15 haVMI3128_1_AI16 haVMI3128_1_AI17 haVMI3128_1_AI18 haVMI3128_1_AI19 haVMI3128_1_AI20 haVMI3128_1_AI21 haVMI3128_1_AI22 haVMI3128_1_AI23 haVMI3128_1_AI24 haVMI3128_1_AI25 haVMI3128_1_AI26 haVMI3128_1_AI27 haVMI3128_1_AI28 haVMI3128_1_AI29 haVMI3128_1_AI30 haVMI3128_1_AI31 haVMI3128_1_AI32 haVMI3128_1_AI33 haVMI3128_1_AI34 haVMI3128_1_AI35 haVMI3128_1_AI36 haVMI3128_1_AI37 haVMI3128_1_AI38 haVMI3128_1_AI39 haVMI3128_1_AI40 haVMI3128_1_AI41 haVMI3128_1_AI42 haVMI3128_1_AI43 haVMI3128_1_AI44 haVMI3128_1_AI45 haVMI3128_1_AI46 haVMI3128_1_AI47 haVMI3128_1_AI48 haVMI3128_1_AI49 haVMI3128_1_AI50 haVMI3128_1_AI51 haVMI3128_1_AI52 haVMI3128_1_AI53 haVMI3128_1_AI54 haVMI3128_1_AI55 haVMI3128_1_AI56 haVMI3128_1_AI57 haVMI3128_1_AI58 haVMI3128_1_AI59 haVMI3128_1_AI60 haVMI3128_1_AI61 haVMI3128_1_AI62 haVMI3128_1_AI63 haVMI3128_1_AI64 haVMI3128_2_AI1 haVMI3128_2_AI2 haVMI3128_2_AI3 haVMI3128_2_AI4 haVMI3128_2_AI5 haVMI3128_2_AI6 haVMI3128_2_AI7 haVMI3128_2_AI8 haVMI3128_2_AI9 haVMI3128_2_AI10 haVMI3128_2_AI11 haVMI3128_2_AI12 haVMI3128_2_AI13 haVMI3128_2_AI14 haVMI3128_2_AI15 haVMI3128_2_AI16 haVMI3128_2_AI17 haVMI3128_2_AI18 haVMI3128_2_AI19 haVMI3128_2_AI20 haVMI3128_2_AI21 haVMI3128_2_AI22 haVMI3128_2_AI23 haVMI3128_2_AI24 haVMI3128_2_AI25 haVMI3128_2_AI26 haVMI3128_2_AI27 haVMI3128_2_AI28 haVMI3128_2_AI29 haVMI3128_2_AI30 haVMI3128_2_AI31 haVMI3128_2_AI32 haVMI3128_2_AI33 haVMI3128_2_AI34 haVMI3128_2_AI35 haVMI3128_2_AI36 haVMI3128_2_AI37 haVMI3128_2_AI38 haVMI3128_2_AI39 haVMI3128_2_AI40 haVMI3128_2_AI41 haVMI3128_2_AI42 haVMI3128_2_AI43 haVMI3128_2_AI44 haVMI3128_2_AI45 haVMI3128_2_AI46 haVMI3128_2_AI47 haVMI3128_2_AI48 haVMI3128_2_AI49 haVMI3128_2_AI50 haVMI3128_2_AI51 haVMI3128_2_AI52 haVMI3128_2_AI53 haVMI3128_2_AI54 haVMI3128_2_AI55 haVMI3128_2_AI56 haVMI3128_2_AI57 haVMI3128_2_AI58 haVMI3128_2_AI59 haVMI3128_2_AI60 haVMI3128_2_AI61 haVMI3128_2_AI62 haVMI3128_2_AI63 haVMI3128_2_AI64 haVMI3128_3_AI1 haVMI3128_3_AI2 haVMI3128_3_AI3 haVMI3128_3_AI4 haVMI3128_3_AI5 haVMI3128_3_AI6 haVMI3128_3_AI7 haVMI3128_3_AI8 haVMI3128_3_AI9 haVMI3128_3_AI10 haVMI3128_3_AI11 haVMI3128_3_AI12 haVMI3128_3_AI13 haVMI3128_3_AI14 haVMI3128_3_AI15 haVMI3128_3_AI16 haVMI3128_3_AI17 haVMI3128_3_AI18 haVMI3128_3_AI19 haVMI3128_3_AI20 haVMI3128_3_AI21 haVMI3128_3_AI22 haVMI3128_3_AI23 haVMI3128_3_AI24 haVMI3128_3_AI25 haVMI3128_3_AI26 haVMI3128_3_AI27 haVMI3128_3_AI28 haVMI3128_3_AI29 haVMI3128_3_AI30 haVMI3128_3_AI31 haVMI3128_3_AI32 haVMI3128_3_AI33 haVMI3128_3_AI34 haVMI3128_3_AI35 haVMI3128_3_AI36 haVMI3128_3_AI37 haVMI3128_3_AI38 haVMI3128_3_AI39 haVMI3128_3_AI40 haVMI3128_3_AI41 haVMI3128_3_AI42 haVMI3128_3_AI43 haVMI3128_3_AI44 haVMI3128_3_AI45 haVMI3128_3_AI46 haVMI3128_3_AI47 haVMI3128_3_AI48 haVMI3128_3_AI49 haVMI3128_3_AI50 haVMI3128_3_AI51 haVMI3128_3_AI52 haVMI3128_3_AI53 haVMI3128_3_AI54 haVMI3128_3_AI55 haVMI3128_3_AI56 haVMI3128_3_AI57 haVMI3128_3_AI58 haVMI3128_3_AI59 haVMI3128_3_AI60 haVMI3128_3_AI61 haVMI3128_3_AI62 haVMI3128_3_AI63 haVMI3128_3_AI64 haVMI3128_4_AI1 haVMI3128_4_AI2 haVMI3128_4_AI3 haVMI3128_4_AI4 haVMI3128_4_AI5 haVMI3128_4_AI6 haVMI3128_4_AI7 haVMI3128_4_AI8 haVMI3128_4_AI9 haVMI3128_4_AI10 haVMI3128_4_AI11 haVMI3128_4_AI12 haVMI3128_4_AI13 haVMI3128_4_AI14 haVMI3128_4_AI15 haVMI3128_4_AI16 "
+
+epicslist13="MBIGBOXM MITIRBCK "
+
+epicslist14="HacB_VMIC1182:0_Ch32 HacB_VMIC1182:0_Ch33 HacB_VMIC1182:0_Ch34 "
+
+# An infinite loop...
+while [ 1 = 1 ] ; do
+	date >| $epicsfile1
+
+# BPMs
+    if [ $TURNON1 -eq 1 ] ; then
+	for word in $epicslist1 ;  do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word  
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1 
+	done
+    fi
+
+# BCMs
+    if [ $TURNON2 -eq 1 ] ; then
+	for word in $epicslist2 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1 
+	done
+    fi
+
+# For DVCS CALO DC CURRENT
+    if [ $TURNON12 -eq 1 ] ; then
+	for word in $epicslist12 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+# Target variables.
+    if [ $TURNON3 -eq 1 ] ; then
+	for word in $epicslist3 ; do
+	    
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi    
+
+# Beam Helicity, Injector stuffs
+    if [ $TURNON4 -eq 1 ] ; then
+	for word in $epicslist4 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+    
+# L-HRS Magnet variables
+    if [ $TURNON5L -eq 1 ] ; then
+	for word in $epicslist5L ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+     fi
+
+# R-HRS Magnet variables
+    if [ $TURNON5R -eq 1 ] ; then
+	for word in $epicslist5R ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+# VDC variables
+    if [ $TURNON5VDC -eq 1 ] ; then
+	for word in $epicslist5VDC ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+# Energy/momentum, Arc and FFB variables
+    if [ $TURNON6 -eq 1 ] ; then
+	for word in $epicslist6 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+# For Left Detector HV
+    if [ $TURNON7 -eq 1 ] ; then
+	for word in $epicslist7 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+# For Right Detector HV
+    if [ $TURNON8 -eq 1 ] ; then
+	for word in $epicslist8 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+    
+# Right Shower HV variables for CSR
+    if [ $TURNON9 -eq 1 ] ; then
+	for word in $epicslist9 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+# Compton variables
+    if [ $TURNON10 -eq 1 ] ; then
+	for word in $epicslist10 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+   
+# For FPP    
+    if [ $TURNON11 -eq 1 ] ; then
+	$HOME/scripts/fpp_e03101 
+	cat $HOME/epics/fpp.epics >> $epicsfile1
+    fi
+
+
+    if [ $TURNON13 -eq 1 ] ; then
+	for word in $epicslist13 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+    if [ $TURNON14 -eq 1 ] ; then
+	for word in $epicslist14 ; do
+	    if [ $TESTPRINT -eq 1 ] ; then
+		echo "---------- test of caget output for $word ------------"
+		$SCRIPTS/caget $word
+	    fi
+	    $SCRIPTS/caget $word >> $epicsfile1
+	done
+    fi
+
+
+#cp $epicsfile $halogfile
+
+
+# ***TEMPORARY. TURN BACK ON FOR LEDEX***********
+    $SCRIPTS/fileToEvent $epicsfile1 131
+
+
+    sleep 30
+
+done
+exit 0
+
+
+
+
+
