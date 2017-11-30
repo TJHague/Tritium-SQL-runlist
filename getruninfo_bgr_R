@@ -1,0 +1,54 @@
+#!/bin/ksh
+SCRIPT_DIR=/adaqfs/halla/adaq/scripts
+# 
+# Run number - needed by mss storage script
+let num=$(eval /adaqfs/halla/adaq/scripts/getrunnumber)
+RUNNUMBER_FILE=/adaqfs/halla/adaq/datafile/rcRunNumberR
+echo "$num" > $RUNNUMBER_FILE
+#
+# New (Feb 8, 2016) scheme to record run info in EPICS
+/adaqfs/home/adaq/runinfo/gp_start_runinfo > /dev/null 
+#adding clear software scaler clear at start of run for left HRS  March 6th 2017 A. Camsonne
+/adaqfs/home/adaq/scaler/right/scread -c
+/adaqfs/home/adaq/scaler/left/scread -c
+# 
+# MLU settings
+#$SCRIPT_DIR/getmlu
+#
+# $SCRIPT_DIR/linkassn > /dev/null 2> /dev/null &
+#
+# reenable scalers if last run died
+# $SCRIPT_DIR/clevclr_r
+#
+# first clean up from previous run (if necessary)
+$SCRIPT_DIR/end_clean 
+#
+#
+PRESCALE=$HOME/prescale/prescaleR.dat       
+$SCRIPT_DIR/fileToEvent $PRESCALE 133 
+#
+$SCRIPT_DIR/epicsRunStart_R &
+#
+# Launch the scaler logger
+$SCRIPT_DIR/getscaler &
+#
+# These are now separate for left and right HRS 
+$SCRIPT_DIR/epicsLogger_R &
+$SCRIPT_DIR/fastEpicsLogger_R &
+#
+# Script to check/restart epics loggers during run
+$SCRIPT_DIR/checkEloggers_R &
+
+sleep 5
+
+exit 0
+
+
+
+
+
+
+
+
+
+
