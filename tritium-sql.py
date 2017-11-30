@@ -40,15 +40,41 @@ caget_query = ['/adaqfs/home/adaq/scrips/caget','-t','']
 
 start_time = ""
 end_time = ""
-target = ""
+
+caget_query[2]='haBDSSELECT' #this is the EPICS name for the variables requested
+caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE) #runs caget, first entry of caget_query is process. all following are args
+target, err = caget.communicate() #returns the output and error status
+target = target.rstrip()
+
 sieve = 0
 raster = ""
-beam_energy = 0.0
-momentum = 0.0
-angle = 0.0
+
+caget_query[2]='MMSHLAE'
+caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+beam_energy, err = caget.communicate()
+beam_energy = beam_energy.rstrip()
+
+if runnum>=90000:
+    caget_query[2]='HacR_D1_P0rb'
+else:
+    caget_query[2]='HacL_D1_P0rb'
+caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+momentum, err = caget.communicate()
+momentum = momentum.rstrip()
+
+if runnum>=90000:
+    caget_query[2]='HacR_alignAGL'
+else:
+    caget_query[2]='HacL_alignAGL'
+caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+angle, err = caget.communicate()
+angle = angle.rstrip()
+
 off_x = 0.0
 off_y = 0.0
 off_z = 0.0
+
+#For comment, need to parse RUN_INFO_L.TITLE_COL line 3 after comment_text=
 comment = ""
 insert_query = ""
 
