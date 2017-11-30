@@ -1,0 +1,2402 @@
+#!/bin/ksh
+#
+# $Id: epicsRunStart,v 1.5 2001/05/31 07:23:36 adaq Exp $
+# May 18, 1998, adapted from the E91026 experiment.
+# Log a bunch of EPICS data at end of run.
+# The experimenters may modify this file.
+#
+# March 5, 1999  R.M.  Use runstart_happex.tcl 
+#                      for happex.  Toss out He3 stuff.
+#
+# July 28, 1999  R.M.  Took away runstart_happex.tcl and
+#                      Restored what was there before happex,
+#                      but runstart.tcl may need mods.
+#
+# Sept 14, 2000  R.M.  Spectrometers are "right" and "left".
+#                      This goes with the magnet system, not
+#                      with the detector stack nor particle type.
+#
+# May  25, 2001  P.Z   gather all filenames at the beginning
+#
+# Sept 18, 2002  K.M   Modified file for E00007.  Added
+#                      readback for G0 helicity and FPP HV
+#
+# Dec  23, 2002  P.S   Modified file for E01012: added polarized 
+#                      3He variables readback.
+#
+# Jan   8, 2003  P.S   add Helicity variables
+#
+# Apr  16, 2003  P.S   add septum and gradient coils variables
+#
+# May   6, 2003  R.M.  Added HALLA:p and HALLA:dpp
+#
+# June 5, 2005 P.M.    Add septum and gradient coils variables again
+#   
+# June 2006            Modified by Guy Ron <gron@jlab.org> for LEDEX Experiments, 
+#                      separated readout for Left and Right Arms added FPP readout, removed septum readout   
+#
+# June 16, 2006        Modified by Emily McCullough <emily@jlab.org> for LEDEX Experiments.
+#                      Made a new Turnon for septum in case someone needs it later. Split up 
+#                      categories to avoid things just being commented out.
+#                   
+
+# July 10,2006         Made Turnon for variables for the new Calorimeter. Still need IPs.
+#
+# August 2,2006        Modified by Brad Sawatzky <brads@jlab.org> for LEDEX
+#                      Corrected EPICS_CA_ADDR_LIST for LHRS angle read-out
+#
+#
+#November 19, 2006     Modified by Elena Khrosinkova <hrosinko@jlab.org> for e04018 experiment.
+#
+# Dec 4, 2006          Elena Khrosinkova <hrosinko@jlab.org>: left and right debugging with
+#                      TURNON22 and 23.
+#
+#
+# $Log: epicsRunStart,v $
+# Revision 1.5  2001/05/31 07:23:36  adaq
+# working version 0.2 for HRS left
+#
+# Revision 1.4  2001/05/31 05:56:17  adaq
+# *** empty log message ***
+#
+# Revision 1.3  2001/05/29 22:29:18  adaq
+# *** empty log message ***
+#
+
+# Added the start of run line in column for Makis AC
+
+# removed long line for Makis AC 04/04/2007
+#
+# Apr 5, 2007           Elena Khrosinkova: Added e04018_db: updates db_run.dat 
+#                       automatically from epics variables
+#
+# Apr 20, 2007   Bob M.   Added 255.13 to the EPICS_CA_ADDR_LIST so that
+#                         caget may still work if 255.12 is down.
+#
+# May 1, 2007       Elena Khrosinkova: Added update for e04018 runs table in mysql;
+#
+# Oct 16, 2007      V. Sulkosky: Turned off 7C, 22 and 23.  Updated Hall C current variable.
+#
+# Oct 17, 2007      V. Sulkosky: Made separate turn on variables for each detector
+#                                for the left and right HRS.
+#
+# Mar 27, 2008      V. Sulkosky: Turned off 20 (CSR HV channels) and turned BigBite
+#                                Magnets on (2)
+# May 08, 2008      V. Sulkosky: Turned on 13 (FPP channels) and added Loop 3 target variables.
+#                
+# Sept 24, 2008     V. Sulkosky: Turned off 13 (FPP channels) and 8 (cyrotarget variables).
+
+#                                Turned off RHRS variables (1R, 3R, 6R). 
+#                                Turned on 10 (pol. 3He variables) and RICH (4).  Added S2m HVs.
+#                                Added A1 HVs
+#
+# Feb 5, 2009       V. Sulkosky: Turned off 4 (RICH) and A1 HVs.  Added target OTR (7C). 
+#
+# Jul 1, 2009       V. Sulkosky: Disabled MySQL scripts for E05-102.
+#
+# Aug 23, 2009       A. Camsonne: renabled BB HV script to record Right ARM HVs
+#
+# 05 Nov 09   -- Modified by R.Silwal for PVDIS. 
+#                Cleaned up the epicslist, slightly
+#                The old scripts is saved as epicsLogger_02Nov09
+#                Turned on 1L, 1R, 3L, 3R, 5, 6L, 6R, 7A, 8, 21LS2, 21LS1, 21LCER, 21LPR1, 21LPR2
+#
+# July 8, 2010   turned off several variables for HV which were not answering and
+#                simply slowing down the script
+#-rw-r--r-- 1 adaq a-adaq  4126 Feb 20 15:12 halog_2450.epics
+
+# Feb 22, 2011   added HRS angle camera logging to CODA file (brads@jlab.org)
+#
+# Dec 13, 2011    Modified by T.Badman for g2p. Added septum current, temporary target status,
+#                 updated BPM variables.
+#
+# Feb 17, 2014   Modified by K. Allada for GMp. 
+# Mar 19, 2014   Trying to add HV with new system A. Camsonne
+# Oct 22, 2014 Modified to include MLU settings, Norman Israel
+# modify DVCS part K.Park @ Mar.31,2016
+# Oct 10, 2016   Limit file size to 50 MB for all children, stop dumping core files
+#                Hopefully limit the damage due to runaway hvcli processes inside GetRightHV* (etc) scripts
+#                -- Brad Sawatzky
+
+#ulimit -f 50000000		# limit file size to 50 MB for all children
+#ulimit -c 0			# stop making core files
+
+log() { # debug echo - send it to /dev/null when not needed
+    echo $* >> $epicsfile
+#    echo $* >>  $SQLFILE
+#    echo $*
+    if [ ! -z "$PS1" ] ; then echo $* ; fi
+}
+#
+# make it easy to turn on/off (1/0) stuff (dont just comment it out!)
+    TURNON0=0      # Target info
+    TURNON1=1      # General info
+    TURNON1S=0     # Septum Magnets
+    TURNON1L=0     # HRS Left Magnets 
+    TURNON1R=1     # HRS Right Magnet
+    TURNON2=0      # Bigbite magnets
+    TURNON3L=0     # HRS Left VDCs 
+    TURNON3R=0     # HRS Right VDCs 
+    TURNON4=0      # RICH Detector Stuff 
+    TURNON5=1      # BEAM info 
+    TURNON5b=0      # BCM gain info 
+    TURNON6L=0    # Left Arm Collimator and angles 
+    TURNON6R=1     # Right Arm Collimator and Angles  
+    TURNON7A=1     # injector/polarized beam info 
+    TURNON7B=1     # Target OTR info
+    TURNON7C=0     # ARC OTR info
+     TURNON7D=0     #Moeller quadrupoles
+   TURNON8=1      # Cryotarget 
+    TURNON9=0      # Gen thresholds for BigHnad and BigBite
+    TURNON10=0     # 3he target variables
+    TURNON11=0     # SLI data
+    TURNON12=0     # Waterfall target
+    TURNON13=0     # Left Arm FPP Stuff 
+    TURNON14=0     # Calorimeter *******turn on for LEDEX!!Still need IP's.
+    TURNON20=0     # CSR HV
+    TURNON21LS2=0  # HRS Left S2 HV
+    TURNON21LS1=0  # HRS Left S1 HV
+    TURNON21LCER=0 # HRS Left Cerenkov HV
+    TURNON21LA1=0  # HRS Left A1 Cerenkov HV
+    TURNON21LPR1=0 # HRS Left Pion Rejector Layer 1 HV
+    TURNON21LPR2=0 # HRS Left Pion Rejector Layer 2 HV
+    TURNON21RS2=0  # HRS Right S2 HV
+    TURNON21RS1=0  # HRS Right S1 HV
+    TURNON21RS2m=0 # HRS Right S2m HV
+    TURNON21RCER=0 # HRS Right Cerenkov HV
+    TURNON21RPS=0  # HRS Right Preshower HV
+    TURNON21RSH=0  # HRS Right Shower HV
+    TURNON22=0     # Left Debugging
+    TURNON23=0     # Right Debugging
+    TURNON24L=0    # Left arm det/scint/S0 for PREX
+    TURNON25=0 # Det encoder positions for PREX
+    TURNON26=0 # PREX Septum
+    TURNON27=0 # DVCS calo
+    TURNON28=0 # SRC (E07006) HV crates
+    TURNON29=0 # Septum Right/Left current readback
+    TURNON30=0 # Temporary Target Status
+    TURNON31=0     # LHRS HV
+    TURNON32=0     # RHRS HV
+     TURNON33=1     # RHRS HV
+     TURNONMLU=0 #MLU info
+/adaqfs/home/adaq/scripts/refreshrun
+
+CAGET=$HOME/scripts/caget
+WISH=$CODA_BIN/dpwish
+#
+RUNFILES=$HOME/epics/runfiles_ar40              # epics run files
+PRESCALE=$HOME/prescale/prescaleR.dat
+RNUMFILE=$HOME/datafile/rcRunNumberR
+#echo "Prescale file = ${PRESCALE}"
+HALOGCOM=/group/halla/www/hallaweb/html/halog/src/halogentry.file 
+SCRIPT_DIR=/adaqfs/halla/adaq/scripts
+
+#
+SQLFILE=$HOME/scripts/mysql/leftsqlepics
+SQLFILENAME=$HOME/scripts/mysql/sqlepicsname
+SQLINSERTL=$HOME/scripts/mysql/insertruntableall.pl
+SQLINSERTR=$HOME/scripts/mysql/insertruntableallright.pl
+RSTAFILE=$HOME/scripts/.runstartR.info
+RCOMFILE=$HOME/scripts/.runstartR.comments
+CSCRIPTS=$HOME/scripts/cscripts
+MLULEFT=/adaqfs/home/atrig/trigmang/mluleft.dat
+MLURIGHT=/adaqfs/home/atrig/trigmang/mluright.dat
+#
+
+#
+num=`cat $RNUMFILE`
+#
+
+RTITFILE=$HOME/scripts/RUN_INFO_R.TITLE
+RTITFILE_COL=$HOME/scripts/RUN_INFO_R.TITLE_COL
+TKSCR=$HOME/scripts/runstartR.tcl
+
+#Clear right arm scalers at the start of the run(for DVCS 2010)
+#/adaqfs/home/adaq/scaler/right/scread -c
+
+#TKSCR=$HOME/scripts/runstart.tcl $num
+#
+epicsfile=$RUNFILES/Start_of_Run_$num.epics
+halogfile=$RUNFILES/halog_$num.epics
+
+# uncomment for debugging!
+#epicsfile=./Start_of_Run_temp.epics
+#halogfile=./halog_temp.epics
+#
+# exec Tcl/Tk script 
+
+#
+/bin/rm -f $epicsfile
+/bin/rm -f $SQLFILE
+echo "Run Timestamp:       `date`" >> $epicsfile  
+
+#EPICS_CA_ADDR_LIST="129.57.255.12 129.57.255.13"
+EPICS_CA_ADDR_LIST="129.57.255.11"
+
+# automatic updated of the runlist MySQL database for E07006
+# Vince Sulkosky on Feb 13, 2011
+##commented Nov27 2016 
+current_time=`date +"%F %T"`
+let energy=`$CAGET -t  HALLA:p`
+#let energy=`$CAGET -t  MMSHLAE`
+let leftmom=`$CAGET -t  HacL_D1_P0rb`
+let leftang=`$CAGET -t  HacL_alignAGL`
+let leftnmr=`$CAGET -t  HacL_D1_NMR:SIG`      
+targname=`$CAGET -t  haBDSSELECT`
+
+# let targpos=`$CAGET -t HaGenTargPos`
+# let targpos=`$CAGET -t  haBDSPOS`
+#let bbcur=`$CAGET -t  MBIGBOXM`
+#let bbang=`cat ${HOME}/scripts/mysql/BB_angle.dat`
+#let ndang=`cat ${HOME}/scripts/mysql/HAND_angle.dat`
+
+#
+# automatic update of db_run.dat for E07-006
+# updated by Vince Sulkosky on Feb 13, 2011
+let rmom=`$CAGET -t  HacR_D1_P0rb`
+let rang=`$CAGET -t  HacR_alignAGL`
+let rightnmr=`$CAGET -t  HacR_D1_NMR:SIG`       
+##let r_m=`$CAGET -t  HacR_D1_P0rb`
+#let r_m_d=$r_m*2
+#echo $r_m_d `$CAGET -t  HacR_alignAGL` $r_m 
+#echo $r_m
+#${HOME}/scripts/e07006/e07006_db $current_time $energy $leftang $leftmom $rang $rmom $bbang $bbcur $num "$targname"
+#${HOME}/scripts/e07006/e08027_db $current_time $energy $leftang $leftmom $rang $rmom $num 
+#${HOME}/scripts/g2p/e08027_db $current_time $energy $leftang $leftmom $rang $rmom $num 
+# end of automatic update of db_run.dat for E07-006 
+#${HOME}/scripts/gmp/gmp_db $current_time $energy $leftang $leftmom $rang $rmom $num $leftnmr $rightnmr
+
+${HOME}/scripts/tritium/tritium_db $current_time $energy $leftang $leftmom $rang $rmom $num
+
+
+#Adding a whole bunch of variables for mysql database for g2p
+#let Current=`$CAGET -t  IBC3H00CRCUR4` 
+#let TargPos=`$CAGET -t  haptPT_Position`
+#let TargPol=`$CAGET -t  haptPolarization` 
+#let TargField=`$CAGET -t  haptMagField`
+#let NMRArea=`$CAGET -t  haptNMR_Area`
+#let muFreq=`$CAGET -t  haptuWave_Freq    `
+#let LeftSep=`$CAGET -t  MITIRBCK   `
+#let HWP=`$CAGET -t -n  IGL1I00OD16_16   ` 
+#let FastRasterIx=`$CAGET -t  EHAR_IXPEAK  `
+#let FastRasterIy=`$CAGET -t  EHAR_IYPEAK  `
+#let SlowRasterIx=`$CAGET -t  EHASR_XIPEAK  `
+#let SlowRasterIy=`$CAGET -t  EHASR_YIPEAK  `
+#let PHWP=`$CAGET -t  IGL1I00DIOFLRD ` 
+#let Encoder=`$CAGET -t  haptPT_Encoder    `
+
+
+# 
+
+#${HOME}/scripts/mysql/addRun2runlist_g2p.pl -r $num -d "$current_time" -l $leftmom -a $leftang -e $energy -c $Current -f $TargField -n $NMRArea -m $muFreq -p $TargPol -q $TargPos -y $LeftSep -h $HWP -b $FastRasterIx -g $FastRasterIy -i $SlowRasterIx -j $SlowRasterIy -z $Encoder
+
+
+#echo "STARTING DPWISH"
+$WISH -f $TKSCR
+
+$SCRIPT_DIR/getmlu_testNorman
+#
+key_phrase=`cat $RTITFILE`
+keyword="Start_Run_${num},${key_phrase}"
+#keyword="Start_Run_${num}"
+#
+
+log "Beginning-of-run EPICS data for Run Number $num at `date`"
+log "<hr>"
+log ""
+
+#log "<center><img src=\"http://i.imgur.com/01ctW.jpg\"/></center> "
+
+#echo $key_phrase >> $epicsfile
+
+#Print all in column
+
+#hum does not work trying som ething else
+#log ""
+
+#`gawk 'BEGIN {FS=","};{for (i=1;i<NF;i++){print $i,"\n";}}' RUN_INFO.TITLE` >> $epicsfile
+log ""
+#`putincol.sh>>$epicsfile`
+#
+#cat  $RTITFILE >> $epicsfile
+log "<b><h2>Shift Worker Info</b></h2>"
+cat  $RTITFILE_COL >> $epicsfile
+log ""
+# write prescales
+log "<b><h2>Prescale Values</b></h2>"
+cat $PRESCALE  >> $epicsfile
+log " ">>$epicsfile
+
+#writes MLU settings -- N.Israel
+if [ $TURNONMLU -eq 1 ] ; then
+log "<b><h2>Right and Left MLU settings</b></h2>"
+log "Left MLU settings">>$epicsfile
+cat $MLULEFT >> $epicsfile
+monthfile=`ls -la $MLULEFT | awk '{ print $6 }'`
+dayfile=`ls -la $MLULEFT | awk '{ print $7 }'`
+timefile=`ls -la $MLULEFT | awk '{ print $8 }'`
+ log "time of Left HRS MLU last setting $monthfile $dayfile at $timefile">>$epicsfile  
+log " ">>$epicsfile
+log "Right MLU settings">>$epicsfile
+cat $MLURIGHT >> $epicsfile
+timefile=`ls -la $MLURIGHT | awk '{ print $8 }'`
+log "time of Right HRS MLU last setting $monthfile $dayfile at $timefile">>$epicsfile 
+monthfile=`ls -la $MLULEFT | awk '{ print $6 }'`
+dayfile=`ls -la $MLULEFT | awk '{ print $7 }'`
+timefile=`ls -la $MLULEFT | awk '{ print $8 }'`
+log " ">>$epicsfile 
+log " ">>$epicsfile 
+log "The meaning of the settings is documented elsewhere; briefly:">>$epicsfile 
+log  "   first number is 0 or 1">>$epicsfile 
+log  "     0 = standard GMp trigger">>$epicsfile 
+log "     1 = single detector trigger">>$epicsfile 
+log " ">>$epicsfile 
+log "   second number is a bit mask">>$epicsfile 
+log "     bit=1 means output is enabled">>$epicsfile 
+log "     bit=0 means output is disabled">>$epicsfile 
+log "     only last 8 bits are relevant for NIM output">>$epicsfile 
+log " ">>$epicsfile 
+log " ">>$epicsfile 
+fi
+
+if [ $TURNON0 -eq 1 ] ; then
+log "<b><h2>Target Info</b></h2>"
+log "Target number in beam                  : "`$CAGET -t  haptPT_Position   `
+log "Target encoder position                : "`$CAGET -t  haptPT_Encoder    `
+log "uWave Frequency (Ghz)                  : "`$CAGET -t  haptuWave_Freq    `
+log "RF Frequency (Mhz)                     : "`$CAGET -t  haptRF_Freq       `
+log "Magnetic Field (T)                     : "`$CAGET -t  haptMagField   `
+log "Magnet Current                         : "`$CAGET -t  haptMagnet_Current   `
+log "VPT 3He (K)                            : "`$CAGET -t  haptVPT_3He   `
+log "VPT 4He (K)                            : "`$CAGET -t  haptVPT_4He   `
+log "NMR Area                               : "`$CAGET -t  haptNMR_Area   `
+log "Polarization                           : "`$CAGET -t  haptPolarization   `
+log ""
+fi
+
+log "<b><h2>General Run Info</b></h2>"
+log  "------"
+if [ $TURNON1 -eq 1 ] ; then
+log "<h3>Beam Energy Information: </h3>"
+log ""
+log "Set Beam energy (MeV)              : " `$CAGET -t  MMSHLAE    `           
+log "Tiefenbach 6GeV Beam energy (MeV)                      : "`$CAGET -t  HALLA:p   `
+log "Tiefenbach 6GeV orbit correction (dpp)   : "`$CAGET -t  HALLA:dpp  `
+log "Injector Measured Energy     :"  `$CAGET -t  INJ:p`
+log "Average North Linac Measured Energy :" $(( ((`$CAGET -t  ARC1:p`-`$CAGET -t  INJ:p`)+(`$CAGET -t  ARC3:p`-`$CAGET -t ARC2:p`)+(`$CAGET -t  ARC5:p`-`$CAGET -t ARC4:p`))/3.0 ))
+log "Average South Linac Measured Energy :" $(( ((`$CAGET -t  ARC2:p`-`$CAGET -t  ARC1:p`)+(`$CAGET -t  ARC4:p`-`$CAGET -t ARC3:p`)+(`$CAGET -t  ARC6:p`-`$CAGET -t ARC5:p`))/3.0 ))
+log "MBSY1c Magnet Current              : "            `$CAGET -t  MBSY1C       `        
+log "MBSY1c Bdl                               : "`$CAGET -t  MBSY1C.BDL   `  
+log "Hall A ARC Current                           : "`$CAGET -t  MBSY1CM`
+log "Hall A ARC Set Current                           : "`$CAGET -t  MBSY1C.S`
+log "Lock [Y/N]                                : " `$CAGET -t MCZDSNMRLOCK`
+log "Position [mm]                       : "`$CAGET -t   MCZDSZD`
+log "Field [T]                                 :"`$CAGET -t    MCZDSRDFMAI`
+log "IPM1C12.XPOS                             : "`$CAGET -t  IPM1C12.XPOS  `
+log "------"
+#log "Beam Current                           : "`$CAGET -t  IBC1H00BCMAVG`   
+log "Beam Current                           : "`$CAGET -t  hac_bcm_average`   
+#log "Hall A ARC Current                           : "`$CAGET -t  MBSY1CM`
+#log "Hall A ARC Set Current                           : "`$CAGET -t  MBSY1C.S`
+#log "------"
+#log "Injector Measured Energy     :"  `$CAGET -t  INJ:p`
+#log "Average North Linac Measured Energy :" $(( ((`$CAGET -t  ARC1:p`-`$CAGET -t  INJ:p`)+(`$CAGET -t  ARC3:p`-`$CAGET -t ARC2:p`)+(`$CAGET -t  ARC5:p`-`$CAGET -t ARC4:p`))/3.0 ))
+#log "Average South Linac Measured Energy :" $(( ((`$CAGET -t  ARC2:p`-`$CAGET -t  ARC1:p`)+(`$CAGET -t  ARC4:p`-`$CAGET -t ARC3:p`)+(`$CAGET -t  ARC6:p`-`$CAGET -t ARC5:p`))/3.0 ))
+log "------"
+#log "Beam Current (Hall C)                  : "`$CAGET -t  IBC3H00CRCUR4   `
+log "Left arm angle                         : "`$CAGET -t  HacL_alignAGL   `
+log "Left arm momentum                      : "`$CAGET -t  HacL_D1_P0rb   `
+log "Right arm angle                        : "`$CAGET -t  HacR_alignAGL   `
+log "Right arm momentum                     : "`$CAGET -t  HacR_D1_P0rb   `
+log "------"
+#log "Left septum current                    : "`$CAGET -t  MITIRBCK   `
+#log "Right septum current                   : "`$CAGET -t  MBIGBOXM   `
+log "Fast Raster-A Ix                         : "`$CAGET -t  EHAR_A_IXPEAK  `
+log "Fast Raster-A Iy                         : "`$CAGET -t  EHAR_A_IYPEAK  `
+log "Fast Raster-B Ix                         : "`$CAGET -t  EHAR_B_IXPEAK  `
+log "Fast Raster-B Iy                         : "`$CAGET -t  EHAR_B_IYPEAK  `
+#log "------"
+#log "Hall A momentum (Tiefenbach) (HALLA:p)   : "`$CAGET -t  HALLA:p    `
+#log "Hall A momentum orbit correction (dpp)   : "`$CAGET -t  HALLA:dpp  `   
+#log "Hall A setup momentum (MMSHLAE)          : "`$CAGET -t  MMSHLAE    `    
+#log "Hall A energy  (halla_MeV)               : "`$CAGET -t  halla_MeV   `
+#log "Hall C energy  (hallc_MeV)               : "`$CAGET -t  hallc_MeV  `
+#log "------"
+#log "MBSY1c magnet current (amp)              : "`$CAGET -t  MBSY1C       `        
+#log "MBSY1c Bdl                               : "`$CAGET -t  MBSY1C.BDL   `  
+log ""
+fi
+
+#log " ">>$epicsfile
+log "<b><h2>Misc Epics Info</b></h2>"
+#  GET ALL THE EPICS INFO
+#  Set address list of epics hosts for magnets variables
+
+#  Magnet Info
+if [ $TURNON1S -eq 1 ] ; then       
+#echo "magnet info"
+log "Left septum set current                 : "`$CAGET -t  MSEPLRSETI` # >> $epicsfile
+log "Left septum current readback            : "`$CAGET -t  MSEPLMIR`  # >> $epicsfile
+log "Left septum upper coil T                : "`$CAGET -t  MSEPLUPCOILT`  # >> $epicsfile
+log "Left septum lower coil T                : "`$CAGET -t  MSEPLLOWCOILT`  # >> $epicsfile
+log "Right septum set current                : "`$CAGET -t  MSEPRRSETI` # >> $epicsfile
+log "Right septum current readback           : "`$CAGET -t  MSEPRMIR`  # >> $epicsfile
+log "Right septum upper coil T               : "`$CAGET -t  MSEPRUPCOILT`  # >> $epicsfile
+log "Right septum lower coil T               : "`$CAGET -t  MSEPRLOWCOILT`  # >> $epicsfile
+log "Left septum yoke T                      : "`$CAGET -t  MSEPLT2R`  # >> $epicsfile
+log "Left septum bore shield  T              : "`$CAGET -t  MSEPLT5R`  # >> $epicsfile
+fi
+
+if [ $TURNON1L -eq 1 ] ; then
+#echo "magnet info 1L"
+log "Left Arm Q1 momentum                     : "`$CAGET -t  HacL_Q1_P0rb    `      
+log "Left Arm Q1 power supply                 : "`$CAGET -t  MQ171LM` 
+log "Left Arm Q1 gauss meter                  : "`$CAGET -t  HacL_Q1_LS450:FLD_DATA` 
+log "Left Arm Q2 power supply current         : "`$CAGET -t  HacL_Q2_HP3458A:IOUT`  
+log "Left Arm Q2 momentum                     : "`$CAGET -t  HacL_Q2_P0rb    `      
+log "Left Arm Q2 gauss meter                  : "`$CAGET -t  HacL_Q2_LS450:FLD_DATA` 
+log "Left Arm Q2 power supply polarity        : "`$CAGET -t  HacL_VMIC1182:0_Ch17` 
+log "Left Arm D1 power supply current         : "`$CAGET -t  HacL_D1_HP3458A:IOUT` 
+echo `$CAGET  HacL_D1_HP3458A:IOUT`  >> $SQLFILE 
+log "Left Arm D1 momentum                     : "`$CAGET -t  HacL_D1_P0rb    `     
+echo `$CAGET  HacL_D1_P0rb`  >> $SQLFILE
+log "Left Arm D1 NMR                          : "`$CAGET -t  HacL_D1_NMR:SIG`      
+echo `$CAGET HacL_D1_NMR:SIG`  >> $SQLFILE
+log "Left Arm Q3 power supply current         : "`$CAGET -t  HacL_Q3_HP3458A:IOUT`  
+log "Left Arm Q3 momentum                     : "`$CAGET -t  HacL_Q3_P0rb    `      
+log "Left Arm Q3 gauss meter                  : "`$CAGET -t  HacL_Q3_LS450:FLD_DATA` 
+log "Left Arm Q3 power supply polarity        : "`$CAGET -t  HacL_VMIC1182:0_Ch26`
+log "Left Arm B Field Hall Probe (D-G)        : "`$CAGET -t  HacL_D_LS450:FLD_DATA`
+echo `$CAGET  HacL_D_LS450:FLD_DATA`  >> $SQLFILE 
+fi
+
+if [ $TURNON1R -eq 1 ] ; then
+#echo "magnet info 1R"
+log " -----"
+log "Right Arm Q1 momentum                    : "`$CAGET -t  HacR_Q1_P0rb    `      
+log "Right Arm Q1 power supply                : "`$CAGET -t  MQ172RM` 
+log "Right Arm Q1 gauss meter                 : "`$CAGET -t  HacR_Q1_LS450:FLD_DATA` 
+log "Right Arm Q2 power supply current        : "`$CAGET -t  HacR_Q2_HP3458A:IOUT`  
+log "Right Arm Q2 momentum                    : "`$CAGET -t  HacR_Q2_P0rb    `      
+log "Right Arm Q2 gauss meter                 : "`$CAGET -t  HacR_Q2_LS450:FLD_DATA` 
+log "Right Arm Q2 power supply polarity       : "`$CAGET -t  HacR_VMIC1182:0_Ch17`  
+log "Right Arm D1 power supply current        : "`$CAGET -t  HacR_D1_HP3458A:IOUT`  
+log "Right Arm D1 momentum                    : "`$CAGET -t  HacR_D1_P0rb    `      
+log "Right Arm D1 NMR                         : "`$CAGET -t  HacR_D1_NMR:SIG`       
+log "Right Arm Q3 power supply current        : "`$CAGET -t  HacR_Q3_HP3458A:IOUT`  
+log "Right Arm Q3 momentum                    : "`$CAGET -t  HacR_Q3_P0rb    `      
+log "Right Arm Q3 gauss meter                 : "`$CAGET -t  HacR_Q3_LS450:FLD_DATA` 
+log "Right Arm Q3 power supply polarity       : "`$CAGET -t  HacR_VMIC1182:0_Ch26`  
+log "Right Arm B Field Hall Probe (D-G)       : "`$CAGET -t  HacR_D_LS450:FLD_DATA`
+fi
+
+#BigBite magnet
+if [ $TURNON2 -eq 1 ] ; then
+#log "BigBite magnet magnet probe              : "`$CAGET -t  HacR_BB_LS450:FLD_DATA`
+log " -----"
+log "BigBite magnet current setpoint          : "`$CAGET -t  MBIGBOX`  
+log "BigBite magnet current readback          : "`$CAGET -t  MBIGBOXM`  
+log "BigBite Gaussmeter readback              : "`$CAGET -t  HacR_BB_LS450:FLD_DATA` 
+fi
+
+#  VDC Currents: Left
+if [ $TURNON3L -eq 1 ] ; then
+
+log " -----"
+log "Left Arm Top VDC Current                 : "`$CAGET -t  HrsH_VDC_rCURTop`      
+log "Left Arm Bottom VDC Current              : "`$CAGET -t  HrsH_VDC_rCURBot`      
+log "Left Arm Top VDC voltage                 : "`$CAGET -t  HrsH_VDC_rHVTop`       
+log "Left Arm Bottom VDC voltage              : "`$CAGET -t  HrsH_VDC_rHVBot`       
+fi
+
+#  VDC Currents: Right
+if [ $TURNON3R -eq 1 ] ; then
+log " -----"
+log "Right Arm Top VDC Current                : "`$CAGET -t  HRSE_DTECTR_HPE1313A:0_Ch1`   
+log "Right Arm Bottom VDC Current             : "`$CAGET -t  HRSE_DTECTR_HPE1313A:0_Ch3` 
+log "Right Arm Top VDC voltage                : "`$CAGET -t  HRSE_DTECTR_HPE1313A:0_Ch0`   
+log "Right Arm Bottom VDC voltage             : "`$CAGET -t  HRSE_DTECTR_HPE1313A:0_Ch2`    
+fi
+
+# RICH stuff
+if [ $TURNON4 -eq 1 ] ; then
+log " -----"
+log "RICH Vmon 16                            : "`$CAGET -t CAENdatC1M2Ch16.NLH`  
+log "RICH Imon 16                            : "`$CAGET -t CAENdatC1M2Ch16.NLK`  
+log "RICH Vmon 17                            : "`$CAGET -t CAENdatC1M2Ch17.NLH`  
+log "RICH Imon 17                            : "`$CAGET -t CAENdatC1M2Ch17.NLK`  
+log "RICH Radiator Oxygen                    : "`$CAGET -t HacRICH_HPE1313A:0_RadO2`  
+log "RICH Radiator Moisture                  : "`$CAGET -t HacRICH_HPE1313A:0_RadMoist`  
+log "RICH Radiator Pressure                  : "`$CAGET -t HacRICH_HPE1313A:0_Ch9`  
+log "RICH Condensor temperature              : "`$CAGET -t HacRICH_HPE1313A:0_Cond_Temp`  
+log "RICH Gas Oxygen                         : "`$CAGET -t HacRICH_HPE1313A:0_GasO2`  
+log "RICH Gas Moisture                       : "`$CAGET -t HacRICH_HPE1313A:0_GasMoist`  
+log "RICH Argon Flow                         : "`$CAGET -t HacRICH_HPE1313A:0_Ch4`  
+log "RICH Methane Flow                       : "`$CAGET -t HacRICH_HPE1313A:0_Ch5`  
+log "RICH A Volts                            : "`$CAGET -t HacRICH_HPE1313A:0_Ch10` 
+log "RICH B Volts                            : "`$CAGET -t HacRICH_HPE1313A:0_Ch11` 
+fi
+
+
+#  Beam Info
+if [ $TURNON5 -eq 1 ] ; then
+#echo "EPICS info 5"
+log " -----"
+log "Average current of the two cavities      : "`$CAGET -t  hac_bcm_average`      
+log "Current on Unser monitor                 : "`$CAGET -t  hac_unser_current`    
+
+log "Current on Upstream bcm                  : "`$CAGET -t  hac_bcm_dvm1_current` 
+log "Current on Downstream bcm                : "`$CAGET -t  hac_bcm_dvm2_current` 
+#log "Upstream Cavity Coefficient              : "`$CAGET -t  IBC1H00CURA.C`           
+#log "Downstream Cavity Coefficient            : "`$CAGET -t  IBC1H00CURB.C `
+#log "Upstream Pedestal                        : "`$CAGET -t  IBC1H00CURA.B `  
+#log "Downstream Pedestal                      : "`$CAGET -t  IBC1H00CURB.B ` 
+
+log "   "
+log "Set Gain on Upstream bcm  (new receiver): "`$CAGET -t  IPM1H05XVGAc.B` 
+log "Set Gain on Downstream bcm    (new receiver) : "`$CAGET -t  IPM1H05YVGAc.B` 
+log "Readback Gain on Upstream bcm  (new receiver): "`$CAGET -t  IPM1H05XVGAr` 
+log "Readback Gain on Downstream bcm    (new receiver) : "`$CAGET -t  IPM1H05YVGAr` 
+log "Upstream Cavity Coefficient    (new receiver) : "`$CAGET -t  IPM1H05CURA.C`           
+log "Downstream Cavity Coefficient   (new receiver) : "`$CAGET -t  IPM1H05CURB.C `
+log "Upstream Pedestal    (new receiver): "`$CAGET -t   IPM1H05CURB.B`  
+log "Downstream Pedestal    (new receiver) : "`$CAGET -t   IPM1H05CURB.B` 
+log "Raw Upstream Signal    (new receiver): "`$CAGET -t  IPM1H05XPM1HZ ` 
+log "Raw Downstream Signal   (new receiver) : "`$CAGET -t  IPM1H05YPM1HZ ` 
+log "DACSL1 A    (new receiver): "`$CAGET -t  IPM1H05DACSL1c.A`  
+log "DACSL1 B    (new receiver) : "`$CAGET -t   IPM1H05DACSL1c.B` 
+log "DACSL2 A     (new receiver): "`$CAGET -t   IPM1H05DACSL2c.A`  
+log "DACSL2 B     (new receiver) : "`$CAGET -t  IPM1H05DACSL2c.B ` 
+log "   "
+log "Current on Upstream bcm  (new receiver): "`$CAGET -t  IPM1H05CURA` 
+log "Current on Downstream bcm    (new receiver) : "`$CAGET -t  IPM1H05CURB` 
+#
+#log " Current on IBC0L02 (source)             : "`$CAGET -t  IBC0L02Current`
+# log " Hall C Current                         : "`$CAGET -t  ibcm1`              
+#log " Hall C Current                          : "`$CAGET -t  IBC3H00CRCUR4`              
+#
+#log "Hall A momentum (Tiefenbach) (HALLA:p)   : "`$CAGET -t  HALLA:p    `
+#log "Hall A momentum orbit correction (dpp)   : "`$CAGET -t  HALLA:dpp  `   
+#log "Hall A setup momentum (MMSHLAE)          : "`$CAGET -t  MMSHLAE    `    
+#log "Hall A energy  (halla_MeV)               : "`$CAGET -t  halla_MeV   `
+#log "Hall C energy  (hallc_MeV)               : "`$CAGET -t  hallc_MeV    `        
+#log "Delta(E)/E width (MV_AI_DXWID)           : "`$CAGET -t  MV_AI_DXWID  `        
+# 
+
+#log "------"
+#log "Hall A ARC Current                           : "`$CAGET -t  MBSY1CM`
+#log "Hall A ARC Set Current                           : "`$CAGET -t  MBSY1C.S`
+#log "Hall A ARC Status                           : "`$CAGET -t  MBSY1C`
+#log "Lock [Y/N]                                : " `$CAGET -t MCZDSNMRLOCK`
+#log "Position [mm]                       : "`$CAGET -t   MCZDSZD`
+#log "Field [T]                                 :"`$CAGET -t    MCZDSRDFMAI`
+#log "------"
+#log "MBSY1c magnet current (amp)              : "`$CAGET -t  MBSY1C       `        
+#log "MBSY1c Bdl                               : "`$CAGET -t  MBSY1C.BDL   `        
+#
+# arc stuff
+#
+#log "Arc1 dp/p                                : "`$CAGET -t  Arc1_dpp`             
+#log "Arc2 dp/p                                : "`$CAGET -t  Arc2_dpp`   
+#log "Raster X width                           : "`$CAGET -t  EHAR_LIXWidth`             
+#log "Raster Y width                           : "`$CAGET -t  EHAR_LIYWidth`    
+#log "-----"
+#log "Radiator Position                        : "`$CAGET -t  HARAD_SM.RBV` 
+#log "-----"
+fi
+
+#  Beam Info
+if [ $TURNON5b -eq 1 ] ; then
+log " -----"
+
+log "Hall A current reading                    : "`$CAGET -t  IPM1H04CRCUR2`
+log "BCM Pre Gain 1 A                          : "`$CAGET -t  IPM1H00VGAAr`
+log "BCM Pre Gain 2 A                          : "`$CAGET -t  IPM1H00VGACr`
+log "Mag Div by 2^n A                          : "`$CAGET -t  IPM1H00MAGGNr`
+log "BCM Pre Gain 1 B                          : "`$CAGET -t  IPM1H00VGABr`
+log "BCM Pre Gain 2 B                          : "`$CAGET -t  IPM1H00VGADr`
+log "Mag Div by 2^n B                          : "`$CAGET -t  IPM1H00MAGGNr`
+fi
+
+# Left Arm Collimator and Angles
+if [ $TURNON6L -eq 1 ] ; then
+#echo "EPICS info 6L"
+log "-----"
+#log " Left Arm Collimator                    : "`$CAGET -t  HacL_COL:ENC`          
+log " Hac_VMIC1182ha18:Encoder                :"`$CAGET -t Hac_VMIC1182ha18:Encoder` 
+log  "HacL_lvdt1_raw.VAL                       : "`$CAGET -t HacL_lvdt1_raw.VAL`
+log  "HacL_lvdt2_raw.VAL                       : "`$CAGET -t HacL_lvdt2_raw.VAL`
+log  "HacL_lvdt3_raw.VAL                       : "`$CAGET -t HacL_lvdt3_raw.VAL`
+log  "HacL_CalcPoint                           : "`$CAGET -t HacL_CalcPoint`
+log  "HacL_CalcAngle                           : "`$CAGET -t HacL_CalcAngle`
+#log " HacL_HPE1313A:0_Ch58                    : "`$CAGET -t  HacL_HPE1313A:0_Ch58` 
+#log " HacL_HPE1313A:0_Ch55                    : "`$CAGET -t  HacL_HPE1313A:0_Ch55` 
+#log " HacL_HPE1313A:0_Ch54                    : "`$CAGET -t  HacL_HPE1313A:0_Ch54` 
+#log " HacL_alignROLL                         : "`$CAGET -t  HacL_alignROLL`        # >> $epicsfile
+#log " HacL_alignPITCH                        : "`$CAGET -t  HacL_alignPITCH`       # >> $epicsfile
+#log " HacL_alignHPT                          : "`$CAGET -t  HacL_alignHPT `        # >> $epicsfile
+#log " Left LVDT HPM                          : "`$CAGET -t  HacL_HPM_LVDT:VALr`    # >> $epicsfile  **never used
+#log " Left LVDT VPM                          : "`$CAGET -t  HacL_VPM_LVDT:VALr`    # >> $epicsfile  **never used
+##
+# 
+log "Left Arm Angle Floor Angle               : "`$CAGET -t  HacL_AglMrk`           # >> $epicsfile
+log "Left Arm Angle Vernier                   : "`$CAGET -t  HacL_AglVrn`           # >> $epicsfile
+log "Left Arm Scattering Angle                : "`$CAGET -t  HacL_alignAGL`         # >> $epicsfile
+#echo `$CAGET  HacL_alignAGL`  >> $SQLFILE 
+#log " Left VDC -DISC LVL Top                  : "`$CAGET -t  HacH_DTC_HPE1313A:0_Ch63`
+#log " Left VDC -DISC LVL Bottom               : "`$CAGET -t  HacH_DTC_HPE1313A:0_Ch62`
+#log " Left VDC -DISC LVL Voltage1             : "`$CAGET -t  HacH_DTC_HPE1313A:0_Ch61`
+#log " Left VDC -DISC LVL Voltage2             : "`$CAGET -t  HacH_DTC_HPE1313A:0_Ch60`
+#log " Left VDC -DISC LVL Top Set              : "`$CAGET -t HRSE_DTECTR_VMIC4140:0_Ch2`
+#log " Left VDC -DISC LVL Bottom Set           : "`$CAGET -t HRSE_DTECTR_VMIC4140:0_Ch3`
+
+fi
+
+# Right Arm Collimator and Angles
+if [ $TURNON6R -eq 1 ] ; then
+#echo "EPICS info 6R"
+log "-----"
+#log " Right Arm Arm Collimator                 : "`$CAGET -t  HacR_COL:ENC`          # >> $epicsfile
+log " Hac_VMIC1182ha19:Encoder                 :"`$CAGET -t Hac_VMIC1182ha19:Encoder`
+log  "HacR_lvdt1_raw.VAL                       : "`$CAGET -t HacR_lvdt1_raw.VAL`
+log  "HacR_lvdt2_raw.VAL                       : "`$CAGET -t HacR_lvdt2_raw.VAL`
+log  "HacR_lvdt3_raw.VAL                       : "`$CAGET -t HacR_lvdt3_raw.VAL`
+log  "HacR_CalcPoint                           : "`$CAGET -t HacR_CalcPoint`
+log  "HacR_CalcAngle                           : "`$CAGET -t HacR_CalcAngle`
+
+#log " HacR_HPE1313A:0_Ch58                    : "`$CAGET -t  HacR_HPE1313A:0_Ch58`   # >> $epicsfile
+#log " HacR_HPE1313A:0_Ch55                    : "`$CAGET -t  HacR_HPE1313A:0_Ch55`   # >> $epicsfile
+#log " HacR_HPE1313A:0_Ch54                    : "`$CAGET -t  HacR_HPE1313A:0_Ch54`   # >> $epicsfile
+#log " HacR_alignROLL                          : "`$CAGET -t  HacR_alignROLL`         # >> $epicsfile
+#log " HacR_alignPITCH                         : "`$CAGET -t  HacR_alignPITCH`        # >> $epicsfile
+#log " HacR_alignHPT                           : "`$CAGET -t  HacR_alignHPT `         # >> $epicsfile
+#log " Right LVDT HPM                           : "`$CAGET -t  HacR_HPM_LVDT:VALr`    # >> $epicsfile **never used
+#log " Right LVDT VPM                           : "`$CAGET -t  HacR_VPM_LVDT:VALr`    # >> $epicsfile **never used
+##
+# 
+log "Right Arm Angle Floor Angle              : "`$CAGET -t  HacR_AglMrk`          
+log "Right Arm Angle Vernier                  : "`$CAGET -t  HacR_AglVrn`          
+log "Right Arm Scattering Angle               : "`$CAGET -t  HacR_alignAGL`        
+fi
+
+# Polarized beam info
+if [ $TURNON7A -eq 1 ] ; then
+#echo "EPICS info 7A"
+log " -----"
+#log "IPM1C12.XPOS                             : "`$CAGET -t  IPM1C12.XPOS  `       
+#log "IPM1C12.YPOS                             : "`$CAGET -t  IPM1C12.YPOS  `       
+log "IPM1H04A.XPOS                            : "`$CAGET -t  IPM1H04A.XPOS  `      
+log "IPM1H04A.YPOS                            : "`$CAGET -t  IPM1H04A.YPOS  `      
+log "IPM1H04B.XPOS                            : "`$CAGET -t  IPM1H04E.XPOS  `      
+log "IPM1H04B.YPOS                            : "`$CAGET -t  IPM1H04E.YPOS  `      
+# survey offsets in bpm positions
+log "Survey X offset bpmA                     : "`$CAGET -t  IPM1H04A.XSOF    `    
+log "Survey Y offset bpmA                     : "`$CAGET -t  IPM1H04A.YSOF    `    
+log "Survey X offset bpmB                     : "`$CAGET -t  IPM1H04E.XSOF    `    
+log "Survey Y offset bpmB                     : "`$CAGET -t  IPM1H04E.YSOF    `
+
+#log "-------------- bpm receiver gain setting"
+#log "BPMA X+ pre gain 1     : "$((`$CAGET -t   IPM1H05AVGAAr`&255))
+#log "BPMA X+ Pre gain 2     : "$(($((`$CAGET -t IPM1H05AVGAAr`>>8))&255))
+#log "BPMA X+ Mag Div        : "$((`$CAGET -t   IPM1H05AMAGDIVr`&15))
+#log "BPMA X- Pre gain 1     : "$((`$CAGET -t   IPM1H05AVGABr`&63))
+#log "BPMA X- Pre gain 2     : "$(($((`$CAGET -t IPM1H05AVGABr`>>8))&63))
+#log "BPMA X- Mag Div        : "$(($((`$CAGET -t IPM1H05AMAGDIVr`>>4))&15))
+#log "BPMA Y+ Pre gain 1     : "$((`$CAGET -t  IPM1H05AVGACr`&63))
+#log "BPMA Y+ Pre gain 2     : "$(($((`$CAGET -t IPM1H05AVGACr`>>8))&63))
+#log "BPMA Y+ Mag Div        : "$(($((`$CAGET -t IPM1H05AMAGDIVr`>>8))&15))
+#log "BPMA Y- Pre gain 1     : "$((`$CAGET -t  IPM1H05AVGADr`&63))
+#log "BPMA Y- Pre gain 2     : "$(($((`$CAGET -t IPM1H05AVGADr`>>8))&63))
+#log "BPMA Y- Mag Div        : "$(($((`$CAGET -t IPM1H05AMAGDIVr`>>12))&15))
+#log "BPMA Mag Filter K      : "$((`$CAGET -t  IPM1H05AFLTRKr`&15))
+#log "BPMA X gain diff       : "`$CAGET -t   "IPM1H05A:Xgain_offset;S" `
+#log "BPMA Y gain diff       : "`$CAGET -t   "IPM1H05A:Ygain_offset;S" `
+#log "BPMA Temp              : "`$CAGET -t   "IPM1H05ATEMP" `
+#log "BPMA Gain Max(HG)      : "`$CAGET -t   "IPM1H05A:op_gain_max;S" `
+#log "BPMA Gain Min(LG)      : "`$CAGET -t   "IPM1H05A:op_gain_min;S" `
+#log "BPMA FilterK HG        : "`$CAGET -t   "IPM1H05A:filterk_hg;S" `
+#log "BPMA FilterK LG        : "`$CAGET -t   "IPM1H05A:filterk_lg;S" `
+#log "BPMA MAGDIV Max(LG)    : "`$CAGET -t   "IPM1H05A:magdiv_max;S" `
+#log "BPMA MAGDIV Min(HG)    : "`$CAGET -t   "IPM1H05A:magdiv_min;S" `
+#log "BPMA Alpha X HG        : "`$CAGET -t   "IPM1H05A:xalpha_hg;S" `
+#log "BPMA Alpha Y HG        : "`$CAGET -t   "IPM1H05A:yalpha_hg;S" `
+#log "BPMA Alpha X LG        : "`$CAGET -t   "IPM1H05A:xalpha_lg;S" `
+#log "BPMA Alpha Y LG        : "`$CAGET -t   "IPM1H05A:yalpha_lg;S" `
+#log "BPMA X Target          : "`$CAGET -t   "IPM1H05A.XTAR" `
+#log "BPMA Y Target          : "`$CAGET -t   "IPM1H05A.YTAR" `
+#log "BPMA LG Threshold      : "`$CAGET -t   "IPM1H05A:DMAX;S" `
+#log "BPMA HG Threshold      : "`$CAGET -t   "IPM1H05A:DMIN;S" `
+#log "" 
+#log "BPMB X+ pre gain 1     : "$((`$CAGET -t   IPM1H05BVGAAr`&255))
+#log "BPMB X+ Pre gain 2     : "$(($((`$CAGET -t IPM1H05BVGAAr`>>8))&255))
+#log "BPMB X+ Mag Div        : "$((`$CAGET -t   IPM1H05BMAGDIVr`&15))
+#log "BPMB X- Pre gain 1     : "$((`$CAGET -t   IPM1H05BVGABr`&63))
+#log "BPMB X- Pre gain 2     : "$(($((`$CAGET -t IPM1H05BVGABr`>>8))&63))
+#log "BPMB X- Mag Div        : "$(($((`$CAGET -t IPM1H05BMAGDIVr`>>4))&15))
+#log "BPMB Y+ Pre gain 1     : "$((`$CAGET -t  IPM1H05BVGACr`&63))
+#log "BPMB Y+ Pre gain 2     : "$(($((`$CAGET -t IPM1H05BVGACr`>>8))&63))
+#log "BPMB Y+ Mag Div        : "$(($((`$CAGET -t IPM1H05BMAGDIVr`>>8))&15))
+#log "BPMB Y- Pre gain 1     : "$((`$CAGET -t  IPM1H05BVGADr`&63))
+#log "BPMB Y- Pre gain 2     : "$(($((`$CAGET -t IPM1H05BVGADr`>>8))&63))
+#log "BPMB Y- Mag Div        : "$(($((`$CAGET -t IPM1H05BMAGDIVr`>>12))&15))
+#log "BPMB Mag Filter K      : "$((`$CAGET -t  IPM1H05BFLTRKr`&15))
+#log "BPMB X gain diff       : "`$CAGET -t   "IPM1H05B:Xgain_offset;S" `
+#log "BPMB Y gain diff       : "`$CAGET -t   "IPM1H05B:Ygain_offset;S" `
+#log "BPMB Temp              : "`$CAGET -t   "IPM1H05BTEMP" `
+#log "BPMB Gain Max(HG)      : "`$CAGET -t   "IPM1H05B:op_gain_max;S" `
+#log "BPMB Gain Min(LG)      : "`$CAGET -t   "IPM1H05B:op_gain_min;S" `
+#log "BPMB FilterK HG        : "`$CAGET -t   "IPM1H05B:filterk_hg;S" `
+#log "BPMB FilterK LG        : "`$CAGET -t   "IPM1H05B:filterk_lg;S" `
+#log "BPMB MAGDIV Max(LG)    : "`$CAGET -t   "IPM1H05B:magdiv_max;S" `
+#log "BPMB MAGDIV Min(HG)    : "`$CAGET -t   "IPM1H05B:magdiv_min;S" `
+#log "BPMB Alpha X HG        : "`$CAGET -t   "IPM1H05B:xalpha_hg;S" `
+#log "BPMB Alpha Y HG        : "`$CAGET -t   "IPM1H05B:yalpha_hg;S" `
+#log "BPMB Alpha X LG        : "`$CAGET -t   "IPM1H05B:xalpha_lg;S" `
+#log "BPMB Alpha Y LG        : "`$CAGET -t   "IPM1H05B:yalpha_lg;S" `
+#log "BPMB X Target          : "`$CAGET -t   "IPM1H05B.XTAR" `
+#log "BPMB Y Target          : "`$CAGET -t   "IPM1H05B.YTAR" `
+#log "BPMB LG Threshold      : "`$CAGET -t   "IPM1H05B:DMAX;S" `
+#log "BPMB HG Threshold      : "`$CAGET -t   "IPM1H05B:DMIN;S" `
+#log ""
+#log "-------------- bcm receiver gain setting"
+#log "BCM A pregain 1        : "`$CAGET -t   IPM1H00VGAAr`
+#log "BCM A pregain 2        : "`$CAGET -t   IPM1H00VGACr`
+#log "BCM A Mag Div          : "$((`$CAGET -t IPM1H00MAGGNr`&15))
+#log "BCM B pregain 1        : "`$CAGET -t   IPM1H00VGABr`
+#log "BCM B pregain 2        : "`$CAGET -t   IPM1H00VGADr`
+#log "BCM B Mag Div          : "$(($((`$CAGET -t IPM1H00MAGGNr`>>8))&63))
+#log "BCM Mag Filter K       : "$((`$CAGET -t IPM1H00FLTRKr`&15))
+#log "BCM Mag Filter K       : "$(($((`$CAGET -t IPM1H00FLTRKr`>>4))&15))
+log " -----"
+log "Wien angle (Vertical)                    : "`$CAGET -t  VWienAngle`              # >> $epicsfile
+log "Wien Vertical BDL (Gcm)                  : "`$CAGET -t  MWF1I04.BDL`            # >> $epicsfile
+log "Wien HV Polarity                         : "`$CAGET -t  IGL1I00OD16_4 `            # >> $epicsfile
+log "Wien electrode Voltage                   : "`$CAGET -t  IGL1I00DAC6`            # >> $epicsfile
+log "Wien angle (Solenoids)                   : "`$CAGET -t  Phi_FG`              # >> $epicsfile
+log "Wien BDL (First Solenoid) (Gcm)          : "`$CAGET -t  MFG1I04A.BDL`            # >> $epicsfile
+log "Wien BDL (Second Solenoid) (Gcm)         : "`$CAGET -t  MFG1I04B.BDL`            # >> $epicsfile
+log "Wien angle (Horizontal)                  : "`$CAGET -t  HWienAngle`              # >> $epicsfile
+log "Wien BDL (Gcm)                           : "`$CAGET -t  MWF0I02.BDL`            # >> $epicsfile
+log "Wien HV Polarity (Horizontal)            : "`$CAGET -t  IGL1I00OD16_9`            # >> $epicsfile
+log "Wien electrode Voltage (Horizontal)      : "`$CAGET -t  IGL1I00DAC5`            # >> $epicsfile
+log "Laser attenuation Hall A                 : "`$CAGET -t  psub_aa_pos`          
+log "Laser power  Hall A                      : "`$CAGET -t  IGL1I00DAC0    `      
+log "Rotating waveplate                       : "`$CAGET -t  psub_pl_pos      ` 
+log "Fake Half-Wave Plate (8960=OUT)          : "`$CAGET -t  IGL1I00DIOFLRD `   
+log "Beam Half-wave plate (off=out)           : "`$CAGET -t  IGL1I00DI24_24M   `   
+log " -----"
+#log "Helicity Delay Set                       : "`$CAGET -t  HELDELAYs`         
+#log "Helicity Pattern Set                     : "`$CAGET -t  HELPATTERNs`   
+#log "Helicity Clock Set                       : "`$CAGET -t  HELCLOCKs`    
+#log "Helicity Settle Read                     : "`$CAGET -t  HELTSETTLEd`  
+#log "Helicity Stable Read                     : "`$CAGET -t  HELTSTABLEd`          # >> $epicsfile     
+#log "Helicity Delay Read                      : "`$CAGET -t  HELDELAYd`         
+#log "Helicity Pattern                         : "`$CAGET -t  HELPATTERNd`  
+#log "Helicity Clock Read                      : "`$CAGET -t  HELCLOCKd`    
+#log "Helicity Frequency                       : "`$CAGET -t  HELFREQ`    
+fi
+
+# OTR BEAM INFO
+if [ $TURNON7B -eq 1 ] ; then
+#echo "EPICS info 7B"
+log "-----"
+#log "target OTR  x-position                          : "`$CAGET -t  hla:MV_AI_DXPOS `
+#log "target OTR  y-position                          : "`$CAGET -t  hla:MV_AI_DYPOS `
+#log "target OTR  x-width                             : "`$CAGET -t  hla:MV_AI_DXWID `
+#log "target OTR  y-width                             : "`$CAGET -t  hla:MV_AI_DYWID `
+#log "target OTR  data valid flag                     : "`$CAGET -t  hla:DataValid `
+#log "target OTR  In/Out                              : "`$CAGET -t  hla:DataReason `
+log "target OTR  In/Out                              : "`$CAGET -t  IOR1H04AT `
+log "---"
+fi
+
+# ARC OTR BEAM INFO
+if [ $TURNON7C -eq 1 ] ; then
+#echo "EPICS info 7C"
+#log "Arc OTR  x-position                          : "`$CAGET -t  hla:MV_AI_DXPOS `
+#log "Arc OTR  y-position                          : "`$CAGET -t  hla:MV_AI_DYPOS `
+#log "Arc OTR  x-width                             : "`$CAGET -t  hla:MV_AI_DXWID `
+#log "Arc OTR  y-width                             : "`$CAGET -t  hla:MV_AI_DYWID `
+#log "Arc OTR  data valid flag                     : "`$CAGET -t  hla:DataValid `
+log "Arc OTR  In/Out                              : "`$CAGET -t  hla:DataReason `
+log "-----"
+fi
+
+# MOELLER QUADRUPOLE EXICTATION
+if [ $TURNON7D -eq 1 ] ; then
+log "Moeller quadrupole currents:"
+log "MQK1H01M                              : "`$CAGET -t  MQK1H01M `
+log "MQO1H02M                              : "`$CAGET -t  MQO1H02M `
+log "MQM1H02M                              : "`$CAGET -t  MQM1H02M `
+log "MQO1H03M                              : "`$CAGET -t  MQO1H03M `
+log "MQO1H03AM                              : "`$CAGET -t  MQO1H03AM `
+log "MQA1H04M                              : "`$CAGET -t  MQA1H04M `
+log "-----"
+fi
+# CRYO TARGET INFO
+if [ $TURNON8 -eq 1 ] ; then 
+
+log "<b><h2>Target Info</b></h2>"
+
+#echo "EPICS info 8"
+log "-----"
+log "Target                                        : "`$CAGET -t haBDSSELECT`
+echo `$CAGET haBDSSELECT`  >> $SQLFILE 
+log "fan frequency loop 1                          : "`$CAGET -t haL1_Fan_Freq_R `
+log "fan frequency loop 2                          : "`$CAGET -t haL2_Fan_Freq_R `
+log "fan frequency loop 3                          : "`$CAGET -t haL3_Fan_Freq_R `
+log "Encoder position                              : "`$CAGET -t haBDSPOS.VAL `
+echo `$CAGET haBDSPOS.VAL `  >> $SQLFILE 
+
+log "Target type                                   : "`$CAGET -t haBDSPOS `
+echo `$CAGET haBDSPOS `  >> $SQLFILE 
+
+log "temperature loop 1(1)                         : "`$CAGET -t haLS218_1_T5`
+log "temperature loop 1(2)                         : "`$CAGET -t haLS218_1_T6`
+log "temperature loop 1(3)                         : "`$CAGET -t haLS218_1_T7`
+log "Heat exchange loop 1 H2                       : "`$CAGET -t haL1_TI_HX_In_R`
+log "temperature loop 2(1)                         : "`$CAGET -t haLS218_2_T5` 
+log "temperature loop 2(2)                         : "`$CAGET -t  haLS218_2_T6`
+log "temperature loop 2(3)                         : "`$CAGET -t  haLS218_2_T7`
+log "Heat exchange loop 2 LH2                       : "`$CAGET -t haL2_TI_HX_In_R `
+log "temperature loop 3(1)                         : "`$CAGET -t haLS218_3_T5`
+log "temperature loop 3(2)                         : "`$CAGET -t haLS218_3_T6`
+log "temperature loop 3(3)                         : "`$CAGET -t haLS218_3_T7`
+log "Heat exchange loop 3 H2                       : "`$CAGET -t haL3_TI_HX_In_R `
+#log "pressure loop He                              : "`$CAGET -t haHe3_P_Fill_Target_R `
+log "pressure loop H2 before                       : "`$CAGET -t haH2_P_Fill_Target_R `
+log "pressure loop H2 return                       : "`$CAGET -t haH2_P_Exhaust_R `
+log "pressure loop H2 before                       : "`$CAGET -t haD2_P_Fill_Target_R `
+log "pressure loop H2 return                       : "`$CAGET -t haD2_P_Exhaust_R `
+log "HPH loop 1                                 : "`$CAGET -t haL1_hp_power_R `
+log "HPH loop 2                                 : "`$CAGET -t haL2_hp_power_R `
+log "HPH loop 3                                 : "`$CAGET -t haL3_hp_power_R `
+fi
+
+# GEN BIGBITE Voltages, etc.
+if [ $TURNON9 -eq 1 ] ; then
+log " -----"
+log "Neutron arm threshold: "`/adaqfs/home/adaq/scripts/threshold-gen get 0 | gawk '{print $1}`
+log "BigBite Preshower threshold: "`/adaqfs/home/adaq/scripts/threshold-gen get 1 | gawk '{print $1}`
+log "BigBite TotalShower threshold: "`/adaqfs/home/adaq/scripts/threshold-gen get 2 | gawk '{print $1}`
+log " -----"
+log "BigBite DC Voltage Ch1 Cathode Front : "`hv_proc.com -D BB_DC -m 1,1:1 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch1 Cathode Back : "`hv_proc.com -D BB_DC -m 2,1:1 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch1 Field : "`hv_proc.com -D BB_DC -m 3,1:1 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch2 Cathode : "`hv_proc.com -D BB_DC -m 1,2:2 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch2 Cathode : "`hv_proc.com -D BB_DC -m 2,2:2 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch2 Field : "`hv_proc.com -D BB_DC -m 3,2:2 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch3 Cathode Top Front : "`hv_proc.com -D BB_DC -m 1,3:3 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch3 Cathode Bot. Front : "`hv_proc.com -D BB_DC -m 2,3:3 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch3 Cathode Top Back : "`hv_proc.com -D BB_DC -m 3,3:3 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch3 Cathode Bot. Back : "`hv_proc.com -D BB_DC -m 4,3:3 -c GET -P MV | gawk '{print $1}` 
+log "BigBite DC Voltage Ch3 Field : "`hv_proc.com -D BB_DC -m 5,3:3 -c GET -P MV | gawk '{print $1}` 
+log " -----"
+log "BigBite DC Current Ch1 Cathode Front : "`hv_proc.com -D BB_DC -m 1,1:1 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch1 Cathode Back : "`hv_proc.com -D BB_DC -m 2,1:1
+ -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch1 Field : "`hv_proc.com -D BB_DC -m 3,1:1 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch2 Cathode : "`hv_proc.com -D BB_DC -m 1,2:2 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch2 Cathode : "`hv_proc.com -D BB_DC -m 2,2:2 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch2 Field : "`hv_proc.com -D BB_DC -m 3,2:2 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch3 Cathode Top Front : "`hv_proc.com -D BB_DC -m 1,3:3 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch3 Cathode Bot. Front : "`hv_proc.com -D BB_DC -m 2,3:3 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch3 Cathode Top Back : "`hv_proc.com -D BB_DC -m 3,3:3 -c GET -P MC | ga${HOME}/scripts/e07006/e07006_db $current_time $energy $leftang $leftmom $rang $rmom $bbang $bbcur $num "$targname"wk '{print $1}` 
+log "BigBite DC Current Ch3 Cathode Bot. Back : "`hv_proc.com -D BB_DC -m 4,3:3 -c GET -P MC | gawk '{print $1}` 
+log "BigBite DC Current Ch3 Field : "`hv_proc.com -D BB_DC -m 5,3:3 -c GET -P MC | gawk '{print $1}'` 
+fi
+
+# 3He Target Cell Temps etc.
+if [ $TURNON10 -eq 1 ] ; then
+log " -----"
+log " RTD1 (upstream)                       : "`$CAGET -t HacAi_hpchan0  `
+log " RTD2                                  : "`$CAGET -t HacAi_hpchan1  `
+log " RTD3                                  : "`$CAGET -t HacAi_hpchan2  `
+log " RTD4                                  : "`$CAGET -t HacAi_hpchan3  `
+log " RTD5 (downstream)                     : "`$CAGET -t HacAi_hpchan4  `
+log " RTD6 (pump cell up)                   : "`$CAGET -t HacAi_hpchan5  `
+log " RTD7 (pump cell down)                 : "`$CAGET -t HacAi_hpchan6  `
+log " HacAi_hpchan7: Temp at Ref. Cell      : "`$CAGET -t HacAi_hpchan7  `
+log " HacAi_hpchan8: Temp at Ref. Cell      : "`$CAGET -t HacAi_hpchan8  `
+log " HacAi_hpchan9: Temp at Ref. Cell      : "`$CAGET -t HacAi_hpchan9  `
+log " Reference Cell Gas Pressure (psi)     : "`$CAGET -t HacAi_hpchan60  `
+log " Reference Cell System Vacuum (Torr)   : "`$CAGET -t HacAi_hpchan61  `
+log " Cooling Jets Flow Rate                : "`$CAGET -t HacAi_hpchan62  `
+log " Target position                       : "`$CAGET -t HaGenTargPos  `
+log " Oven Air Flow                         : "`$CAGET -t HacOMEGA_RTD  `
+#log " Over Heater Temperature               : "`$CAGET -t HacDP41_READ  `
+log " -----"
+log " HaGenTargBrake : "`$CAGET -t HaGenTargBrake  `
+log " HaGenTargBrake : "`$CAGET -t HaGenTargBrake  `
+log " HacOMEGA_AL1 : "`$CAGET -t HacOMEGA_AL1`
+log " HacOMEGA_READ : "`$CAGET -t HacOMEGA_READ`
+log " HacOMEGA_SP1 : "`$CAGET -t HacOMEGA_SP1`
+log " HacOMEGA_PROP1 : "`$CAGET -t HacOMEGA_PROP1`
+log " HacOMEGA_RST1 : "`$CAGET -t HacOMEGA_RST1`
+log " HacOMEGA_RATE : "`$CAGET -t HacOMEGA_RATE1`
+#log " pol3heSmallCoilCurrent : "`$CAGET -t pol3heSmallCoilCurrent`
+log " -----"
+log " CLASER_STATE_MB : "`$CAGET -t CLASER_STATE_MB`
+log " CLASER_RDCUR : "`$CAGET -t CLASER_RDCUR`
+log " CLASER_TEMP : "`$CAGET -t CLASER_TEMP`
+log " -----"
+log " CLASER2_STATE_MB : "`$CAGET -t CLASER2_STATE_MB`
+log " CLASER2_RDCUR : "`$CAGET -t CLASER2_RDCUR`
+log " CLASER2_TEMP  : "`$CAGET -t CLASER2_TEMP`
+log " -----"
+log " CLASERAB_STATE_MB : "`$CAGET -t CLASERAB_STATE_MB`
+log " CLASERAB_GETCUR0 : "`$CAGET -t CLASERAB_GETCUR0`
+log " CLASERAB_GETCUR1 : "`$CAGET -t CLASERAB_GETCUR1`
+log " CLASERAB_GETTEMP0 : "`$CAGET -t CLASERAB_GETTEMP0`
+log " CLASERAB_GETTEMP1 : "`$CAGET -t CLASERAB_GETTEMP1`
+log " -----"
+log " CLASER3_STATE_MB : "`$CAGET -t CLASER3_STATE_MB`
+log " CLASER3_RDCUR : "`$CAGET -t CLASER3_RDCUR`
+log " CLASER3_TEMP : "`$CAGET -t CLASER3_TEMP`
+log " -----"
+log " CLASER4_STATE_MB : "`$CAGET -t CLASER4_STATE_MB`
+log " CLASER4_RDCUR : "`$CAGET -t CLASER4_RDCUR`
+log " CLASER4_TEMP : "`$CAGET -t CLASER4_TEMP`
+log " -----"
+log " CLASER5_STATE_MB : "`$CAGET -t CLASER5_STATE_MB`
+log " CLASER5_RDCUR : "`$CAGET -t CLASER5_RDCUR`
+log " CLASER5_TEMP : "`$CAGET -t CLASER5_TEMP`
+log " -----"
+log " CLASER6_STATE_MB : "`$CAGET -t CLASER6_STATE_MB`
+log " CLASER6_RDCUR : "`$CAGET -t CLASER6_RDCUR`
+log " CLASER6_TEMP : "`$CAGET -t CLASER6_TEMP`
+log " -----"
+log " CLASERAB2_STATE_M   : "`$CAGET -t CLASERAB2_STATE_MB`
+log " CLASERAB2_GETCUR0   : "`$CAGET -t CLASERAB2_GETCUR0`
+log " CLASERAB2_GETCUR1   : "`$CAGET -t CLASERAB2_GETCUR1`
+log " CLASERAB2_GETTEMP0  : "`$CAGET -t CLASERAB2_GETTEMP0`
+log " CLASERAB2_GETTEMP1  : "`$CAGET -t CLASERAB2_GETTEMP1`
+log " ----"
+log " CLASERAB3_STATE_M   : "`$CAGET -t CLASERAB3_STATE_MB`
+log " CLASERAB3_GETCUR0   : "`$CAGET -t CLASERAB3_GETCUR0`
+log " CLASERAB3_GETCUR1   : "`$CAGET -t CLASERAB3_GETCUR1`
+log " CLASERAB3_GETTEMP0  : "`$CAGET -t CLASERAB3_GETTEMP0`
+log " CLASERAB3_GETTEMP1  : "`$CAGET -t CLASERAB3_GETTEMP1`
+log " ----"
+log " nld1_lasmdp         : "`$CAGET -t nld1_lasmdp`
+log " ntc1_temp           : "`$CAGET -t ntc1_temp`
+log " nld1_lasouti        : "`$CAGET -t nld1_lasouti`
+log " ntc1_tecouti        : "`$CAGET -t ntc1_tecouti`
+log " nld1_lascond        : "`$CAGET -t nld1_lascond`
+log " ----"
+log " nld2_lasmdp         : "`$CAGET -t nld2_lasmdp`
+log " ntc2_temp           : "`$CAGET -t ntc2_temp`
+log " nld2_lasouti        : "`$CAGET -t nld2_lasouti`
+log " ntc2_tecouti        : "`$CAGET -t ntc2_tecouti`
+log " nld2_lascond        : "`$CAGET -t nld2_lascond`
+log " ----"
+log " nld3_lasmdp         : "`$CAGET -t nld3_lasmdp`
+log " ntc3_temp           : "`$CAGET -t ntc3_temp`
+log " nld3_lasouti        : "`$CAGET -t nld3_lasouti`
+log " ntc3_tecouti        : "`$CAGET -t ntc3_tecouti`
+log " nld3_lascond        : "`$CAGET -t nld3_lascond`
+log " ----"  
+log " DDM45_1disp1_read   : "`$CAGET -t DDM45_1disp1_read`
+log " DDM45_2disp1_read   : "`$CAGET -t DDM45_2disp1_read`
+log " DDM45_3disp1_read   : "`$CAGET -t DDM45_3disp1_read`
+log " ----"  
+log " haPolHe3_Spin_State       : "`$CAGET -t haPolHe3_Spin_State`
+log " haPolHe3_Flip_Sequence_ID : "`$CAGET -t haPolHe3_Flip_Sequence_ID`
+log " haPolHe3_Flip_Count       : "`$CAGET -t haPolHe3_Flip_Count`
+log " haPolHe3_EPR_ID           : "`$CAGET -t haPolHe3_EPR_ID`
+log " haPolHe3_EPR_POL          : "`$CAGET -t haPolHe3_EPR_POL`
+log " haPolHe3_Last_Flip_Start  : "`$CAGET -t haPolHe3_Last_Flip_Start`
+log " haPolHe3_Last_Flip_End    : "`$CAGET -t haPolHe3_Last_Flip_End`
+log " haPolHe3_FLIP_NMR_PHASE   : "`$CAGET -t haPolHe3_FLIP_NMR_PHASE`
+log " haPolHe3_FLIP_NMR_Mag     : "`$CAGET -t haPolHe3_FLIP_NMR_Mag`
+log " haPolHe3_FLIP_NMR_Pol     : "`$CAGET -t haPolHe3_FLIP_NMR_Pol`
+log " HaGenTargSpin1            : "`$CAGET -t HaGenTargSpin1`
+log " HaGenTargSpin2            : "`$CAGET -t HaGenTargSpin2`
+log " HaGenTargPos              : "`$CAGET -t HaGenTargPos`
+fi
+
+# SLI stuff
+if [ $TURNON11 -eq 1 ] ; then
+log " ----"
+log "SLI data valid?                         : "`$CAGET -t slia:DataValid`
+log "SLI horiz size mm                       : "`$CAGET -t slia:MV_AO_DYWIDS`
+log "SLI Energy spread  *10^5                : "`$CAGET -t slia:MV_AO_SPREADS`
+log "SLI x position                          : "`$CAGET -t slia:MV_AI_DYPOS`
+log "SLI vert. size mm                       : "`$CAGET -t slia:MV_AO_DXWIDS`
+log "SLI y position                          : "`$CAGET -t slia:MV_AI_DXPOS`
+log "-----"
+fi
+
+# Waterfall
+if [ $TURNON12 -eq 1 ] ; then
+log "Waterfall Pump Speed                    : "`$CAGET -t HAWF_DAC1`
+log "Target StepMot Pos.                     : "`$CAGET -t HA_WF_motpos`
+fi
+
+# Calorimeter *** Turn on for LEDEX !!!
+if [ $TURNON14 -eq 1 ] ; then
+log "IFY1H04:rtd_wall1                     : "`$CAGET -t IFY1H04:rtd_wall1`
+log "IFY1H04:rtd_wall2                     : "`$CAGET -t IFY1H04:rtd_wall2`
+log "IFY1H04:rtd_target                    : "`$CAGET -t IFY1H04:rtd_target`
+fi
+
+
+# CSR
+if [ $TURNON20 -eq 1 ] ; then
+log "CSR NaI 251-270"
+log "CSR Slot13 ch0                   : "`$CAGET -t MF7b1461_13ch0property.F`
+log "CSR Slot13 ch1                   : "`$CAGET -t MF7b1461_13ch1property.F`
+log "CSR Slot13 ch2                   : "`$CAGET -t MF7b1461_13ch2property.F`
+log "CSR Slot13 ch3                   : "`$CAGET -t MF7b1461_13ch3property.F`
+log "CSR Slot13 ch4                   : "`$CAGET -t MF7b1461_13ch4property.F`
+log "CSR Slot13 ch5                   : "`$CAGET -t MF7b1461_13ch5property.F`
+log "CSR Slot13 ch6                   : "`$CAGET -t MF7b1461_13ch6property.F`
+log "CSR Slot13 ch7                   : "`$CAGET -t MF7b1461_13ch7property.F`
+log "CSR Slot13 ch8                   : "`$CAGET -t MF7b1461_13ch8property.F`
+log "CSR Slot13 ch9                   : "`$CAGET -t MF7b1461_13ch9property.F`
+log "CSR Slot13 ch10                  : "`$CAGET -t MF7b1461_13ch10property.F`
+log "CSR Slot13 ch11                  : "`$CAGET -t MF7b1461_13ch11property.F`
+
+log "CSR Slot14 ch0                   : "`$CAGET -t MF7b1461_14ch0property.F`
+log "CSR Slot14 ch1                   : "`$CAGET -t MF7b1461_14ch1property.F`
+log "CSR Slot14 ch2                   : "`$CAGET -t MF7b1461_14ch2property.F`
+log "CSR Slot14 ch3                   : "`$CAGET -t MF7b1461_14ch3property.F`
+log "CSR Slot14 ch4                   : "`$CAGET -t MF7b1461_14ch4property.F`
+log "CSR Slot14 ch5                   : "`$CAGET -t MF7b1461_14ch5property.F`
+log "CSR Slot14 ch6                   : "`$CAGET -t MF7b1461_14ch6property.F`
+log "CSR Slot14 ch7                   : "`$CAGET -t MF7b1461_14ch7property.F`
+log "CSR Slot14 ch8                   : "`$CAGET -t MF7b1461_14ch8property.F`
+log "CSR Slot14 ch9                   : "`$CAGET -t MF7b1461_14ch9property.F`
+log "CSR Slot14 ch10                  : "`$CAGET -t MF7b1461_14ch10property.F`
+log "CSR Slot14 ch11                  : "`$CAGET -t MF7b1461_14ch11property.F`
+fi
+
+# FPP: Left Arm
+if [ $TURNON13 -eq 1 ] ; then
+#echo "EPICS info FPP"
+#    $HOME/scripts/fpp_e03101 
+#    cat $HOME/epics/fpp.epics >> $epicsfile
+log " "
+log "FPP Voltages"
+log "Voltage card 7 Gen. 0 Ch. 0			:"`$CAGET -t MF7b1469_7gn0ch0property.F `
+log "Voltage card 7 Gen. 0 Ch. 1			:"`$CAGET -t MF7b1469_7gn0ch1property.F `
+log "Voltage card 7 Gen. 0 Ch. 2			:"`$CAGET -t MF7b1469_7gn0ch2property.F `
+log "Voltage card 7 Gen. 0 Ch. 3			:"`$CAGET -t MF7b1469_7gn0ch3property.F `
+log "Voltage card 7 Gen. 0 Ch. 4			:"`$CAGET -t MF7b1469_7gn0ch4property.F `
+log "Voltage card 7 Gen. 0 Ch. 5			:"`$CAGET -t MF7b1469_7gn0ch5property.F `
+log "Voltage card 7 Gen. 1 Ch. 0			:"`$CAGET -t MF7b1469_7gn1ch0property.F `
+log "Voltage card 7 Gen. 1 Ch. 1			:"`$CAGET -t MF7b1469_7gn1ch1property.F `
+log "Voltage card 7 Gen. 1 Ch. 2			:"`$CAGET -t MF7b1469_7gn1ch2property.F `
+log "Voltage card 7 Gen. 1 Ch. 3			:"`$CAGET -t MF7b1469_7gn1ch3property.F `
+log "Voltage card 7 Gen. 1 Ch. 4			:"`$CAGET -t MF7b1469_7gn1ch4property.F `
+log "Voltage card 7 Gen. 1 Ch. 5			:"`$CAGET -t MF7b1469_7gn1ch5property.F `
+log "Voltage card 7 Gen. 2 Ch. 0			:"`$CAGET -t MF7b1469_7gn2ch0property.F `
+log "Voltage card 7 Gen. 2 Ch. 1			:"`$CAGET -t MF7b1469_7gn2ch1property.F `
+log "Voltage card 7 Gen. 2 Ch. 2			:"`$CAGET -t MF7b1469_7gn2ch2property.F `
+log "Voltage card 7 Gen. 2 Ch. 3			:"`$CAGET -t MF7b1469_7gn2ch3property.F `
+log "Voltage card 7 Gen. 2 Ch. 4			:"`$CAGET -t MF7b1469_7gn2ch4property.F `
+log "Voltage card 7 Gen. 2 Ch. 5			:"`$CAGET -t MF7b1469_7gn2ch5property.F `
+log "Voltage card 8 Gen. 0 Ch. 0			:"`$CAGET -t MF7b1469_8gn0ch0property.F `
+log "Voltage card 8 Gen. 0 Ch. 1			:"`$CAGET -t MF7b1469_8gn0ch1property.F `
+log "Voltage card 8 Gen. 0 Ch. 2			:"`$CAGET -t MF7b1469_8gn0ch2property.F `
+log "Voltage card 8 Gen. 0 Ch. 3			:"`$CAGET -t MF7b1469_8gn0ch3property.F `
+log "Voltage card 8 Gen. 0 Ch. 4			:"`$CAGET -t MF7b1469_8gn0ch4property.F `
+log "Voltage card 8 Gen. 0 Ch. 5			:"`$CAGET -t MF7b1469_8gn0ch5property.F `
+log "Voltage card 8 Gen. 1 Ch. 0			:"`$CAGET -t MF7b1469_8gn1ch0property.F `
+log "Voltage card 8 Gen. 1 Ch. 1			:"`$CAGET -t MF7b1469_8gn1ch1property.F `
+log "Voltage card 8 Gen. 1 Ch. 2			:"`$CAGET -t MF7b1469_8gn1ch2property.F `
+log "Voltage card 8 Gen. 1 Ch. 3			:"`$CAGET -t MF7b1469_8gn1ch3property.F `
+log "Voltage card 8 Gen. 1 Ch. 4			:"`$CAGET -t MF7b1469_8gn1ch4property.F `
+log "Voltage card 8 Gen. 1 Ch. 5			:"`$CAGET -t MF7b1469_8gn1ch5property.F `
+log "Voltage card 8 Gen. 2 Ch. 0			:"`$CAGET -t MF7b1469_8gn2ch0property.F `
+log "Voltage card 8 Gen. 2 Ch. 1			:"`$CAGET -t MF7b1469_8gn2ch1property.F `
+log "Voltage card 8 Gen. 2 Ch. 2			:"`$CAGET -t MF7b1469_8gn2ch2property.F `
+log "Voltage card 8 Gen. 2 Ch. 3			:"`$CAGET -t MF7b1469_8gn2ch3property.F `
+log "Voltage card 8 Gen. 2 Ch. 4			:"`$CAGET -t MF7b1469_8gn2ch4property.F `
+log "Voltage card 8 Gen. 2 Ch. 5			:"`$CAGET -t MF7b1469_8gn2ch5property.F `
+#log "Current card 7 Gen. 0 Ch. 0			:"`$CAGET -t MF7b1469_7gn0ch0property.E `
+#log "Current card 7 Gen. 0 Ch. 1			:"`$CAGET -t MF7b1469_7gn0ch1property.E `
+#log "Current card 7 Gen. 0 Ch. 2			:"`$CAGET -t MF7b1469_7gn0ch2property.E `
+#log "Current card 7 Gen. 0 Ch. 3			:"`$CAGET -t MF7b1469_7gn0ch3property.E `
+#log "Current card 7 Gen. 0 Ch. 4			:"`$CAGET -t MF7b1469_7gn0ch4property.E `
+#log "Current card 7 Gen. 0 Ch. 5			:"`$CAGET -t MF7b1469_7gn0ch5property.E `
+#log "Current card 7 Gen. 1 Ch. 0			:"`$CAGET -t MF7b1469_7gn1ch0property.E `
+#log "Current card 7 Gen. 1 Ch. 1			:"`$CAGET -t MF7b1469_7gn1ch1property.E `
+#log "Current card 7 Gen. 1 Ch. 2			:"`$CAGET -t MF7b1469_7gn1ch2property.E `
+#log "Current card 7 Gen. 1 Ch. 3			:"`$CAGET -t MF7b1469_7gn1ch3property.E `
+#log "Current card 7 Gen. 1 Ch. 4			:"`$CAGET -t MF7b1469_7gn1ch4property.E `
+#log "Current card 7 Gen. 1 Ch. 5			:"`$CAGET -t MF7b1469_7gn1ch5property.E `
+#log "Current card 7 Gen. 2 Ch. 0			:"`$CAGET -t MF7b1469_7gn2ch0property.E `
+#log "Current card 7 Gen. 2 Ch. 1			:"`$CAGET -t MF7b1469_7gn2ch1property.E `
+#log "Current card 7 Gen. 2 Ch. 2			:"`$CAGET -t MF7b1469_7gn2ch2property.E `
+#log "Current card 7 Gen. 2 Ch. 3			:"`$CAGET -t MF7b1469_7gn2ch3property.E `
+#log "Current card 7 Gen. 2 Ch. 4			:"`$CAGET -t MF7b1469_7gn2ch4property.E `
+#log "Current card 7 Gen. 2 Ch. 5			:"`$CAGET -t MF7b1469_7gn2ch5property.E `
+#log "Current card 8 Gen. 0 Ch. 0			:"`$CAGET -t MF7b1469_8gn0ch0property.E `
+#log "Current card 8 Gen. 0 Ch. 1			:"`$CAGET -t MF7b1469_8gn0ch1property.E `
+#log "Current card 8 Gen. 0 Ch. 2			:"`$CAGET -t MF7b1469_8gn0ch2property.E `
+#log "Current card 8 Gen. 0 Ch. 3			:"`$CAGET -t MF7b1469_8gn0ch3property.E `
+#log "Current card 8 Gen. 0 Ch. 4			:"`$CAGET -t MF7b1469_8gn0ch4property.E `
+#log "Current card 8 Gen. 0 Ch. 5			:"`$CAGET -t MF7b1469_8gn0ch5property.E `
+#log "Current card 8 Gen. 1 Ch. 0			:"`$CAGET -t MF7b1469_8gn1ch0property.E `
+#log "Current card 8 Gen. 1 Ch. 1			:"`$CAGET -t MF7b1469_8gn1ch1property.E `
+#log "Current card 8 Gen. 1 Ch. 2			:"`$CAGET -t MF7b1469_8gn1ch2property.E `
+#log "Current card 8 Gen. 1 Ch. 3			:"`$CAGET -t MF7b1469_8gn1ch3property.E `
+#log "Current card 8 Gen. 1 Ch. 4			:"`$CAGET -t MF7b1469_8gn1ch4property.E `
+#log "Current card 8 Gen. 1 Ch. 5			:"`$CAGET -t MF7b1469_8gn1ch5property.E `
+#log "Current card 8 Gen. 2 Ch. 0			:"`$CAGET -t MF7b1469_8gn2ch0property.E `
+#log "Current card 8 Gen. 2 Ch. 1			:"`$CAGET -t MF7b1469_8gn2ch1property.E `
+#log "Current card 8 Gen. 2 Ch. 2			:"`$CAGET -t MF7b1469_8gn2ch2property.E `
+#log "Current card 8 Gen. 2 Ch. 3			:"`$CAGET -t MF7b1469_8gn2ch3property.E `
+#log "Current card 8 Gen. 2 Ch. 4			:"`$CAGET -t MF7b1469_8gn2ch4property.E `
+#log "Current card 8 Gen. 2 Ch. 5			:"`$CAGET -t MF7b1469_8gn2ch5property.E `
+log " "
+fi
+
+# Left S2 HV
+if [ $TURNON21LS2 -eq 1 ] ; then
+log " "
+log "Left S2 HV Left PMTs"
+log "S2 Slot0 ch0 Left                   : "`$CAGET -t  MF7b1461_0ch0property.F`
+log "S2 Slot0 ch1 Left                   : "`$CAGET -t  MF7b1461_0ch1property.F`
+log "S2 Slot0 ch2 Left                   : "`$CAGET -t  MF7b1461_0ch2property.F`
+log "S2 Slot0 ch3 Left                   : "`$CAGET -t  MF7b1461_0ch3property.F`
+log "S2 Slot0 ch4 Left                   : "`$CAGET -t  MF7b1461_0ch4property.F`
+log "S2 Slot0 ch5 Left                   : "`$CAGET -t  MF7b1461_0ch5property.F`
+log "S2 Slot0 ch6 Left                   : "`$CAGET -t  MF7b1461_0ch6property.F`
+log "S2 Slot0 ch7 Left                   : "`$CAGET -t  MF7b1461_0ch7property.F`
+log "S2 Slot0 ch8 Left                   : "`$CAGET -t  MF7b1461_0ch8property.F`
+log "S2 Slot0 ch9 Left                   : "`$CAGET -t  MF7b1461_0ch9property.F`
+log "S2 Slot0 ch10 Left                  : "`$CAGET -t  MF7b1461_0ch10property.F`
+log "S2 Slot0 ch11 Left                  : "`$CAGET -t  MF7b1461_0ch11property.F`
+log "S2 Slot13 ch0 Left                  : "`$CAGET -t  MF7b1461_13ch0property.F`
+log "S2 Slot13 ch1 Left                  : "`$CAGET -t  MF7b1461_13ch1property.F`
+log "S2 Slot13 ch2 Left                  : "`$CAGET -t  MF7b1461_13ch2property.F`
+log "S2 Slot13 ch3 Left                  : "`$CAGET -t  MF7b1461_13ch3property.F`
+log " -----"
+log "Left S2 HV Right PMTs"
+log "S2 Slot12 ch0 Right                  : "`$CAGET -t  MF7b1461_12ch0property.F`
+log "S2 Slot12 ch1 Right                  : "`$CAGET -t  MF7b1461_12ch1property.F`
+log "S2 Slot12 ch2 Right                  : "`$CAGET -t  MF7b1461_12ch2property.F`
+log "S2 Slot12 ch3 Right                  : "`$CAGET -t  MF7b1461_12ch3property.F`
+log "S2 Slot12 ch4 Right                  : "`$CAGET -t  MF7b1461_12ch4property.F`
+log "S2 Slot12 ch5 Right                  : "`$CAGET -t  MF7b1461_12ch5property.F`
+log "S2 Slot12 ch6 Right                  : "`$CAGET -t  MF7b1461_12ch6property.F`
+log "S2 Slot12 ch7 Right                  : "`$CAGET -t  MF7b1461_12ch7property.F`
+log "S2 Slot12 ch8 Right                  : "`$CAGET -t  MF7b1461_12ch8property.F`
+log "S2 Slot12 ch9 Right                  : "`$CAGET -t  MF7b1461_12ch9property.F`
+log "S2 Slot12 ch10 Right                 : "`$CAGET -t  MF7b1461_12ch10property.F`
+log "S2 Slot12 ch11 Right                 : "`$CAGET -t  MF7b1461_12ch11property.F`
+log "S2 Slot13 ch4 Right                  : "`$CAGET -t  MF7b1461_13ch4property.F`
+log "S2 Slot13 ch5 Right                  : "`$CAGET -t  MF7b1461_13ch5property.F`
+log "S2 Slot13 ch6 Right                  : "`$CAGET -t  MF7b1461_13ch6property.F`
+log "S2 Slot13 ch7 Right                  : "`$CAGET -t  MF7b1461_13ch7property.F`
+log " -----"
+fi
+
+# Left S1 HV
+if [ $TURNON21LS1 -eq 1 ] ; then
+log "Left S1 HV"
+log "S1 Slot1 ch0                   : "`$CAGET -t  MF7b1461_1ch0property.F`
+log "S1 Slot1 ch1                   : "`$CAGET -t  MF7b1461_1ch1property.F`
+log "S1 Slot1 ch2                   : "`$CAGET -t  MF7b1461_1ch2property.F`
+log "S1 Slot1 ch3                   : "`$CAGET -t  MF7b1461_1ch3property.F`
+log "S1 Slot1 ch4                   : "`$CAGET -t  MF7b1461_1ch4property.F`
+log "S1 Slot1 ch5                   : "`$CAGET -t  MF7b1461_1ch5property.F`
+log "S1 Slot1 ch6                   : "`$CAGET -t  MF7b1461_1ch6property.F`
+log "S1 Slot1 ch7                   : "`$CAGET -t  MF7b1461_1ch7property.F`
+log "S1 Slot1 ch8                   : "`$CAGET -t  MF7b1461_1ch8property.F`
+log "S1 Slot1 ch9                   : "`$CAGET -t  MF7b1461_1ch9property.F`
+log "S1 Slot1 ch10                  : "`$CAGET -t  MF7b1461_1ch10property.F`
+log "S1 Slot1 ch11                  : "`$CAGET -t  MF7b1461_1ch11property.F`
+log " -----"
+fi
+
+# Left CER HV
+if [ $TURNON21LCER -eq 1 ] ; then
+log "Left Cerenkov HV"
+log "GCER Slot2 ch0                   : "`$CAGET -t  MF7b1461_2ch0property.F`
+log "GCER Slot2 ch1                   : "`$CAGET -t  MF7b1461_2ch1property.F`
+log "GCER Slot2 ch2                   : "`$CAGET -t  MF7b1461_2ch2property.F`
+log "GCER Slot2 ch3                   : "`$CAGET -t  MF7b1461_2ch3property.F`
+log "GCER Slot2 ch4                   : "`$CAGET -t  MF7b1461_2ch4property.F`
+log "GCER Slot2 ch5                   : "`$CAGET -t  MF7b1461_2ch5property.F`
+log "GCER Slot2 ch6                   : "`$CAGET -t  MF7b1461_2ch6property.F`
+log "GCER Slot2 ch7                   : "`$CAGET -t  MF7b1461_2ch7property.F`
+log "GCER Slot2 ch8                   : "`$CAGET -t  MF7b1461_2ch8property.F`
+log "GCER Slot2 ch9                   : "`$CAGET -t  MF7b1461_2ch9property.F`
+log "GCER Slot2 ch10                  : "`$CAGET -t  MF7b1461_2ch10property.F`
+log "GCER Slot2 ch11                  : "`$CAGET -t  MF7b1461_2ch11property.F`
+log " -----"
+fi
+
+# Left CER HV
+if [ $TURNON21LA1 -eq 1 ] ; then
+log "Left A1 Cerenkov HV"
+log "A1 CER Slot14 ch0                   : "`$CAGET -t  MF7b1461_14ch0property.F`
+log "A1 CER Slot14 ch1                   : "`$CAGET -t  MF7b1461_14ch1property.F`
+log "A1 CER Slot14 ch2                   : "`$CAGET -t  MF7b1461_14ch2property.F`
+log "A1 CER Slot14 ch3                   : "`$CAGET -t  MF7b1461_14ch3property.F`
+log "A1 CER Slot14 ch4                   : "`$CAGET -t  MF7b1461_14ch4property.F`
+log "A1 CER Slot14 ch5                   : "`$CAGET -t  MF7b1461_14ch5property.F`
+log "A1 CER Slot14 ch6                   : "`$CAGET -t  MF7b1461_14ch6property.F`
+log "A1 CER Slot14 ch7                   : "`$CAGET -t  MF7b1461_14ch7property.F`
+log "A1 CER Slot14 ch8                   : "`$CAGET -t  MF7b1461_14ch8property.F`
+log "A1 CER Slot14 ch9                   : "`$CAGET -t  MF7b1461_14ch9property.F`
+log "A1 CER Slot14 ch10                  : "`$CAGET -t  MF7b1461_14ch10property.F`
+log "A1 CER Slot14 ch11                  : "`$CAGET -t  MF7b1461_14ch11property.F`
+log " -----"
+log "A1 CER Slot15 ch0                   : "`$CAGET -t  MF7b1461_15ch0property.F`
+log "A1 CER Slot15 ch1                   : "`$CAGET -t  MF7b1461_15ch1property.F`
+log "A1 CER Slot15 ch2                   : "`$CAGET -t  MF7b1461_15ch2property.F`
+log "A1 CER Slot15 ch3                   : "`$CAGET -t  MF7b1461_15ch3property.F`
+log "A1 CER Slot15 ch4                   : "`$CAGET -t  MF7b1461_15ch4property.F`
+log "A1 CER Slot15 ch5                   : "`$CAGET -t  MF7b1461_15ch5property.F`
+log "A1 CER Slot15 ch6                   : "`$CAGET -t  MF7b1461_15ch6property.F`
+log "A1 CER Slot15 ch7                   : "`$CAGET -t  MF7b1461_15ch7property.F`
+log "A1 CER Slot15 ch8                   : "`$CAGET -t  MF7b1461_15ch8property.F`
+log "A1 CER Slot15 ch9                   : "`$CAGET -t  MF7b1461_15ch9property.F`
+log "A1 CER Slot15 ch10                  : "`$CAGET -t  MF7b1461_15ch10property.F`
+log "A1 CER Slot15 ch11                  : "`$CAGET -t  MF7b1461_15ch11property.F`
+log " -----"
+fi
+
+# Left PR L1 HV
+if [ $TURNON21LPR1 -eq 1 ] ; then
+log "Left Pion Rejector Layer 1 HV"
+log "PRL1 Slot3 ch0                   : "`$CAGET -t  MF7b1461_3ch0property.F`
+log "PRL1 Slot3 ch1                   : "`$CAGET -t  MF7b1461_3ch1property.F`
+log "PRL1 Slot3 ch2                   : "`$CAGET -t  MF7b1461_3ch2property.F`
+log "PRL1 Slot3 ch3                   : "`$CAGET -t  MF7b1461_3ch3property.F`
+log "PRL1 Slot3 ch4                   : "`$CAGET -t  MF7b1461_3ch4property.F`
+log "PRL1 Slot3 ch5                   : "`$CAGET -t  MF7b1461_3ch5property.F`
+log "PRL1 Slot3 ch6                   : "`$CAGET -t  MF7b1461_3ch6property.F`
+log "PRL1 Slot3 ch7                   : "`$CAGET -t  MF7b1461_3ch7property.F`
+log "PRL1 Slot3 ch8                   : "`$CAGET -t  MF7b1461_3ch8property.F`
+log "PRL1 Slot3 ch9                   : "`$CAGET -t  MF7b1461_3ch9property.F`
+log "PRL1 Slot3 ch10                  : "`$CAGET -t  MF7b1461_3ch10property.F`
+log "PRL1 Slot3 ch11                  : "`$CAGET -t  MF7b1461_3ch11property.F`
+log "PRL1 Slot4 ch0                   : "`$CAGET -t  MF7b1461_4ch0property.F`
+log "PRL1 Slot4 ch1                   : "`$CAGET -t  MF7b1461_4ch1property.F`
+log "PRL1 Slot4 ch2                   : "`$CAGET -t  MF7b1461_4ch2property.F`
+log "PRL1 Slot4 ch3                   : "`$CAGET -t  MF7b1461_4ch3property.F`
+log "PRL1 Slot4 ch4                   : "`$CAGET -t  MF7b1461_4ch4property.F`
+log "PRL1 Slot4 ch5                   : "`$CAGET -t  MF7b1461_4ch5property.F`
+log "PRL1 Slot4 ch6                   : "`$CAGET -t  MF7b1461_4ch6property.F`
+log "PRL1 Slot4 ch7                   : "`$CAGET -t  MF7b1461_4ch7property.F`
+log "PRL1 Slot4 ch8                   : "`$CAGET -t  MF7b1461_4ch8property.F`
+log "PRL1 Slot4 ch9                   : "`$CAGET -t  MF7b1461_4ch9property.F`
+log "PRL1 Slot4 ch10                  : "`$CAGET -t  MF7b1461_4ch10property.F`
+log "PRL1 Slot4 ch11                  : "`$CAGET -t  MF7b1461_4ch11property.F`
+log "PRL1 Slot5 ch0                   : "`$CAGET -t  MF7b1461_5ch0property.F`
+log "PRL1 Slot5 ch1                   : "`$CAGET -t  MF7b1461_5ch1property.F`
+log "PRL1 Slot5 ch2                   : "`$CAGET -t  MF7b1461_5ch2property.F`
+log "PRL1 Slot5 ch3                   : "`$CAGET -t  MF7b1461_5ch3property.F`
+log "PRL1 Slot5 ch4                   : "`$CAGET -t  MF7b1461_5ch4property.F`
+log "PRL1 Slot5 ch5                   : "`$CAGET -t  MF7b1461_5ch5property.F`
+log "PRL1 Slot5 ch6                   : "`$CAGET -t  MF7b1461_5ch6property.F`
+log "PRL1 Slot5 ch7                   : "`$CAGET -t  MF7b1461_5ch7property.F`
+log "PRL1 Slot5 ch8                   : "`$CAGET -t  MF7b1461_5ch8property.F`
+log "PRL1 Slot5 ch9                   : "`$CAGET -t  MF7b1461_5ch9property.F`
+log "PRL1 Slot5 ch10                  : "`$CAGET -t  MF7b1461_5ch10property.F`
+log "PRL1 Slot5 ch11                  : "`$CAGET -t  MF7b1461_5ch11property.F`
+log " -----"
+fi
+
+# Left PR L2 HV
+if [ $TURNON21LPR2 -eq 1 ] ; then
+log "Left Pion Rejector Layer 2 HV"
+log "PRL2 Slot9 ch0                   : "`$CAGET -t  MF7b1461_9ch0property.F`
+log "PRL2 Slot9 ch1                   : "`$CAGET -t  MF7b1461_9ch1property.F`
+log "PRL2 Slot9 ch2                   : "`$CAGET -t  MF7b1461_9ch2property.F`
+log "PRL2 Slot9 ch3                   : "`$CAGET -t  MF7b1461_9ch3property.F`
+log "PRL2 Slot9 ch4                   : "`$CAGET -t  MF7b1461_9ch4property.F`
+log "PRL2 Slot9 ch5                   : "`$CAGET -t  MF7b1461_9ch5property.F`
+log "PRL2 Slot9 ch6                   : "`$CAGET -t  MF7b1461_9ch6property.F`
+log "PRL2 Slot9 ch7                   : "`$CAGET -t  MF7b1461_9ch7property.F`
+log "PRL2 Slot9 ch8                   : "`$CAGET -t  MF7b1461_9ch8property.F`
+log "PRL2 Slot9 ch9                   : "`$CAGET -t  MF7b1461_9ch9property.F`
+log "PRL2 Slot9 ch10                  : "`$CAGET -t  MF7b1461_9ch10property.F`
+log "PRL2 Slot9 ch11                  : "`$CAGET -t  MF7b1461_9ch11property.F`
+log "PRL2 Slot10 ch0                  : "`$CAGET -t  MF7b1461_10ch0property.F`
+log "PRL2 Slot10 ch1                  : "`$CAGET -t  MF7b1461_10ch1property.F`
+log "PRL2 Slot10 ch2                  : "`$CAGET -t  MF7b1461_10ch2property.F`
+log "PRL2 Slot10 ch3                  : "`$CAGET -t  MF7b1461_10ch3property.F`
+log "PRL2 Slot10 ch4                  : "`$CAGET -t  MF7b1461_10ch4property.F`
+log "PRL2 Slot10 ch5                  : "`$CAGET -t  MF7b1461_10ch5property.F`
+log "PRL2 Slot10 ch6                  : "`$CAGET -t  MF7b1461_10ch6property.F`
+log "PRL2 Slot10 ch7                  : "`$CAGET -t  MF7b1461_10ch7property.F`
+log "PRL2 Slot10 ch8                  : "`$CAGET -t  MF7b1461_10ch8property.F`
+log "PRL2 Slot10 ch9                  : "`$CAGET -t  MF7b1461_10ch9property.F`
+log "PRL2 Slot10 ch10                 : "`$CAGET -t  MF7b1461_10ch10property.F`
+log "PRL2 Slot10 ch11                 : "`$CAGET -t  MF7b1461_10ch11property.F`
+log "PRL2 Slot11 ch0                  : "`$CAGET -t  MF7b1461_11ch0property.F`
+log "PRL2 Slot11 ch1                  : "`$CAGET -t  MF7b1461_11ch1property.F`
+log "PRL2 Slot11 ch2                  : "`$CAGET -t  MF7b1461_11ch2property.F`
+log "PRL2 Slot11 ch3                  : "`$CAGET -t  MF7b1461_11ch3property.F`
+log "PRL2 Slot11 ch4                  : "`$CAGET -t  MF7b1461_11ch4property.F`
+log "PRL2 Slot11 ch5                  : "`$CAGET -t  MF7b1461_11ch5property.F`
+log "PRL2 Slot11 ch6                  : "`$CAGET -t  MF7b1461_11ch6property.F`
+log "PRL2 Slot11 ch7                  : "`$CAGET -t  MF7b1461_11ch7property.F`
+log "PRL2 Slot11 ch8                  : "`$CAGET -t  MF7b1461_11ch8property.F`
+log "PRL2 Slot11 ch9                  : "`$CAGET -t  MF7b1461_11ch9property.F`
+log "PRL2 Slot11 ch10                 : "`$CAGET -t  MF7b1461_11ch10property.F`
+log "PRL2 Slot11 ch11                 : "`$CAGET -t  MF7b1461_11ch11property.F`
+log " -----"
+fi
+
+# Right S2 HV
+if [ $TURNON21RS2 -eq 1 ] ; then
+log "Right S2 HV"
+log "S2 Slot1 ch0                   : "`$CAGET -t MF3b1461_1ch0property.F`
+log "S2 Slot1 ch1                   : "`$CAGET -t MF3b1461_1ch1property.F`
+log "S2 Slot1 ch2                   : "`$CAGET -t MF3b1461_1ch2property.F`
+log "S2 Slot1 ch3                   : "`$CAGET -t MF3b1461_1ch3property.F`
+log "S2 Slot1 ch4                   : "`$CAGET -t MF3b1461_1ch4property.F`
+log "S2 Slot1 ch5                   : "`$CAGET -t MF3b1461_1ch5property.F`
+log "S2 Slot1 ch6                   : "`$CAGET -t MF3b1461_1ch6property.F`
+log "S2 Slot1 ch7                   : "`$CAGET -t MF3b1461_1ch7property.F`
+log "S2 Slot1 ch8                   : "`$CAGET -t MF3b1461_1ch8property.F`
+log "S2 Slot1 ch9                   : "`$CAGET -t MF3b1461_1ch9property.F`
+log "S2 Slot1 ch10                  : "`$CAGET -t MF3b1461_1ch10property.F`
+log "S2 Slot1 ch11                  : "`$CAGET -t MF3b1461_1ch11property.F`
+log " -----"
+fi
+
+# Right S1 HV
+if [ $TURNON21RS1 -eq 1 ] ; then
+log "Right S1 HV"
+log "S1 Slot2 ch0                   : "`$CAGET -t MF3b1461_2ch0property.F`
+log "S1 Slot2 ch1                   : "`$CAGET -t MF3b1461_2ch1property.F`
+log "S1 Slot2 ch2                   : "`$CAGET -t MF3b1461_2ch2property.F`
+log "S1 Slot2 ch3                   : "`$CAGET -t MF3b1461_2ch3property.F`
+log "S1 Slot2 ch4                   : "`$CAGET -t MF3b1461_2ch4property.F`
+log "S1 Slot2 ch5                   : "`$CAGET -t MF3b1461_2ch5property.F`
+log "S1 Slot2 ch6                   : "`$CAGET -t MF3b1461_2ch6property.F`
+log "S1 Slot2 ch7                   : "`$CAGET -t MF3b1461_2ch7property.F`
+log "S1 Slot2 ch8                   : "`$CAGET -t MF3b1461_2ch8property.F`
+log "S1 Slot2 ch9                   : "`$CAGET -t MF3b1461_2ch9property.F`
+log "S1 Slot2 ch10                  : "`$CAGET -t MF3b1461_2ch10property.F`
+log "S1 Slot2 ch11                  : "`$CAGET -t MF3b1461_2ch11property.F`
+log " -----"
+fi
+
+# Right S2m HV
+if [ $TURNON21RS2m -eq 1 ] ; then
+log "Right S2m HV"
+log "S2m Slot1 ch0                   : "`$CAGET -t MF3b1461_1ch0property.F`
+log "S2m Slot1 ch1                   : "`$CAGET -t MF3b1461_1ch1property.F`
+log "S2m Slot1 ch2                   : "`$CAGET -t MF3b1461_1ch2property.F`
+log "S2m Slot1 ch3                   : "`$CAGET -t MF3b1461_1ch3property.F`
+log "S2m Slot1 ch4                   : "`$CAGET -t MF3b1461_1ch4property.F`
+log "S2m Slot1 ch5                   : "`$CAGET -t MF3b1461_1ch5property.F`
+log "S2m Slot1 ch6                   : "`$CAGET -t MF3b1461_1ch6property.F`
+log "S2m Slot1 ch7                   : "`$CAGET -t MF3b1461_1ch7property.F`
+log "S2m Slot1 ch8                   : "`$CAGET -t MF3b1461_1ch8property.F`
+log "S2m Slot1 ch9                   : "`$CAGET -t MF3b1461_1ch9property.F`
+log "S2m Slot1 ch10                  : "`$CAGET -t MF3b1461_1ch10property.F`
+log "S2m Slot1 ch11                  : "`$CAGET -t MF3b1461_1ch11property.F`
+log "S2m Slot10 ch0                  : "`$CAGET -t MF3b1461_10ch0property.F`
+log "S2m Slot10 ch1                  : "`$CAGET -t MF3b1461_10ch1property.F`
+log "S2m Slot10 ch2                  : "`$CAGET -t MF3b1461_10ch2property.F`
+log "S2m Slot10 ch3                  : "`$CAGET -t MF3b1461_10ch3property.F`
+log "S2m Slot10 ch4                  : "`$CAGET -t MF3b1461_10ch4property.F`
+log "S2m Slot10 ch5                  : "`$CAGET -t MF3b1461_10ch5property.F`
+log "S2m Slot10 ch6                  : "`$CAGET -t MF3b1461_10ch6property.F`
+log "S2m Slot10 ch7                  : "`$CAGET -t MF3b1461_10ch7property.F`
+log "S2m Slot10 ch8                  : "`$CAGET -t MF3b1461_10ch8property.F`
+log "S2m Slot10 ch9                  : "`$CAGET -t MF3b1461_10ch9property.F`
+log "S2m Slot10 ch10                 : "`$CAGET -t MF3b1461_10ch10property.F`
+log "S2m Slot10 ch11                 : "`$CAGET -t MF3b1461_10ch11property.F`
+log "S2m Slot11 ch0                  : "`$CAGET -t MF3b1461_11ch0property.F`
+log "S2m Slot11 ch1                  : "`$CAGET -t MF3b1461_11ch1property.F`
+log "S2m Slot11 ch2                  : "`$CAGET -t MF3b1461_11ch2property.F`
+log "S2m Slot11 ch3                  : "`$CAGET -t MF3b1461_11ch3property.F`
+log "S2m Slot11 ch4                  : "`$CAGET -t MF3b1461_11ch4property.F`
+log "S2m Slot11 ch5                  : "`$CAGET -t MF3b1461_11ch5property.F`
+log "S2m Slot11 ch6                  : "`$CAGET -t MF3b1461_11ch6property.F`
+log "S2m Slot11 ch7                  : "`$CAGET -t MF3b1461_11ch7property.F`
+log "S2m Slot11 ch8                  : "`$CAGET -t MF3b1461_11ch8property.F`
+log "S2m Slot11 ch9                  : "`$CAGET -t MF3b1461_11ch9property.F`
+log "S2m Slot11 ch10                 : "`$CAGET -t MF3b1461_11ch10property.F`
+log "S2m Slot11 ch11                 : "`$CAGET -t MF3b1461_11ch11property.F`
+log " -----"
+fi
+
+# Right Preshower HV
+if [ $TURNON21RPS -eq 1 ] ; then
+log "Right Preshower HV"
+log "PS Slot4 ch0                   : "`$CAGET -t MF3b1461_4ch0property.F`
+log "PS Slot4 ch1                   : "`$CAGET -t MF3b1461_4ch1property.F`
+log "PS Slot4 ch2                   : "`$CAGET -t MF3b1461_4ch2property.F`
+log "PS Slot4 ch3                   : "`$CAGET -t MF3b1461_4ch3property.F`
+log "PS Slot4 ch4                   : "`$CAGET -t MF3b1461_4ch4property.F`
+log "PS Slot4 ch5                   : "`$CAGET -t MF3b1461_4ch5property.F`
+log "PS Slot4 ch6                   : "`$CAGET -t MF3b1461_4ch6property.F`
+log "PS Slot4 ch7                   : "`$CAGET -t MF3b1461_4ch7property.F`
+log "PS Slot4 ch8                   : "`$CAGET -t MF3b1461_4ch8property.F`
+log "PS Slot4 ch9                   : "`$CAGET -t MF3b1461_4ch9property.F`
+log "PS Slot4 ch10                  : "`$CAGET -t MF3b1461_4ch10property.F`
+log "PS Slot4 ch11                  : "`$CAGET -t MF3b1461_4ch11property.F`
+log "PS Slot5 ch0                   : "`$CAGET -t MF3b1461_5ch0property.F`
+log "PS Slot5 ch1                   : "`$CAGET -t MF3b1461_5ch1property.F`
+log "PS Slot5 ch2                   : "`$CAGET -t MF3b1461_5ch2property.F`
+log "PS Slot5 ch3                   : "`$CAGET -t MF3b1461_5ch3property.F`
+log "PS Slot5 ch4                   : "`$CAGET -t MF3b1461_5ch4property.F`
+log "PS Slot5 ch5                   : "`$CAGET -t MF3b1461_5ch5property.F`
+log "PS Slot5 ch6                   : "`$CAGET -t MF3b1461_5ch6property.F`
+log "PS Slot5 ch7                   : "`$CAGET -t MF3b1461_5ch7property.F`
+log "PS Slot5 ch8                   : "`$CAGET -t MF3b1461_5ch8property.F`
+log "PS Slot5 ch9                   : "`$CAGET -t MF3b1461_5ch9property.F`
+log "PS Slot5 ch10                  : "`$CAGET -t MF3b1461_5ch10property.F`
+log "PS Slot5 ch11                  : "`$CAGET -t MF3b1461_5ch11property.F`
+log "PS Slot7 ch0                   : "`$CAGET -t MF3b1461_7ch0property.F`
+log "PS Slot7 ch1                   : "`$CAGET -t MF3b1461_7ch1property.F`
+log "PS Slot7 ch2                   : "`$CAGET -t MF3b1461_7ch2property.F`
+log "PS Slot7 ch3                   : "`$CAGET -t MF3b1461_7ch3property.F`
+log "PS Slot7 ch4                   : "`$CAGET -t MF3b1461_7ch4property.F`
+log "PS Slot7 ch5                   : "`$CAGET -t MF3b1461_7ch5property.F`
+log "PS Slot7 ch6                   : "`$CAGET -t MF3b1461_7ch6property.F`
+log "PS Slot7 ch7                   : "`$CAGET -t MF3b1461_7ch7property.F`
+log "PS Slot7 ch8                   : "`$CAGET -t MF3b1461_7ch8property.F`
+log "PS Slot7 ch9                   : "`$CAGET -t MF3b1461_7ch9property.F`
+log "PS Slot7 ch10                  : "`$CAGET -t MF3b1461_7ch10property.F`
+log "PS Slot7 ch11                  : "`$CAGET -t MF3b1461_7ch11property.F`
+log "PS Slot8 ch0                   : "`$CAGET -t MF3b1461_8ch0property.F`
+log "PS Slot8 ch1                   : "`$CAGET -t MF3b1461_8ch1property.F`
+log "PS Slot8 ch2                   : "`$CAGET -t MF3b1461_8ch2property.F`
+log "PS Slot8 ch3                   : "`$CAGET -t MF3b1461_8ch3property.F`
+log "PS Slot8 ch4                   : "`$CAGET -t MF3b1461_8ch4property.F`
+log "PS Slot8 ch5                   : "`$CAGET -t MF3b1461_8ch5property.F`
+log "PS Slot8 ch6                   : "`$CAGET -t MF3b1461_8ch6property.F`
+log "PS Slot8 ch7                   : "`$CAGET -t MF3b1461_8ch7property.F`
+log "PS Slot8 ch8                   : "`$CAGET -t MF3b1461_8ch8property.F`
+log "PS Slot8 ch9                   : "`$CAGET -t MF3b1461_8ch9property.F`
+log "PS Slot8 ch10                  : "`$CAGET -t MF3b1461_8ch10property.F`
+log "PS Slot8 ch11                  : "`$CAGET -t MF3b1461_8ch11property.F`
+log " -----"
+fi
+
+# Right Cerenkov HV
+if [ $TURNON21RCER -eq 1 ] ; then
+log "Right Cerenkov HV"
+log "GCER Slot14 ch0                   : "`$CAGET -t MF3b1461_14ch0property.F`
+log "GCER Slot14 ch1                   : "`$CAGET -t MF3b1461_14ch1property.F`
+log "GCER Slot14 ch2                   : "`$CAGET -t MF3b1461_14ch2property.F`
+log "GCER Slot14 ch3                   : "`$CAGET -t MF3b1461_14ch3property.F`
+log "GCER Slot14 ch4                   : "`$CAGET -t MF3b1461_14ch4property.F`
+log "GCER Slot14 ch5                   : "`$CAGET -t MF3b1461_14ch5property.F`
+log "GCER Slot14 ch6                   : "`$CAGET -t MF3b1461_14ch6property.F`
+log "GCER Slot14 ch7                   : "`$CAGET -t MF3b1461_14ch7property.F`
+log "GCER Slot14 ch8                   : "`$CAGET -t MF3b1461_14ch8property.F`
+log "GCER Slot14 ch9                   : "`$CAGET -t MF3b1461_14ch9property.F`
+log "GCER Slot14 ch10                  : "`$CAGET -t MF3b1461_14ch10property.F`
+log "GCER Slot14 ch11                  : "`$CAGET -t MF3b1461_14ch11property.F`
+log " -----"
+fi
+
+# Right Shower HV
+if [ $TURNON21RSH -eq 1 ] ; then
+log "Right Shower HV"
+log "SH Slot1 ch0                   : "`$CAGET -t MF1b1461_1ch0property.F`
+log "SH Slot1 ch1                   : "`$CAGET -t MF1b1461_1ch1property.F`
+log "SH Slot1 ch2                   : "`$CAGET -t MF1b1461_1ch2property.F`
+log "SH Slot1 ch3                   : "`$CAGET -t MF1b1461_1ch3property.F`
+log "SH Slot1 ch4                   : "`$CAGET -t MF1b1461_1ch4property.F`
+log "SH Slot1 ch5                   : "`$CAGET -t MF1b1461_1ch5property.F`
+log "SH Slot1 ch6                   : "`$CAGET -t MF1b1461_1ch6property.F`
+log "SH Slot1 ch7                   : "`$CAGET -t MF1b1461_1ch7property.F`
+log "SH Slot1 ch8                   : "`$CAGET -t MF1b1461_1ch8property.F`
+log "SH Slot1 ch9                   : "`$CAGET -t MF1b1461_1ch9property.F`
+log "SH Slot1 ch10                  : "`$CAGET -t MF1b1461_1ch10property.F`
+log "SH Slot1 ch11                  : "`$CAGET -t MF1b1461_1ch11property.F`
+log "SH Slot2 ch0                   : "`$CAGET -t MF1b1461_2ch0property.F`
+log "SH Slot2 ch1                   : "`$CAGET -t MF1b1461_2ch1property.F`
+log "SH Slot2 ch2                   : "`$CAGET -t MF1b1461_2ch2property.F`
+log "SH Slot2 ch3                   : "`$CAGET -t MF1b1461_2ch3property.F`
+log "SH Slot2 ch4                   : "`$CAGET -t MF1b1461_2ch4property.F`
+log "SH Slot2 ch5                   : "`$CAGET -t MF1b1461_2ch5property.F`
+log "SH Slot2 ch6                   : "`$CAGET -t MF1b1461_2ch6property.F`
+log "SH Slot2 ch7                   : "`$CAGET -t MF1b1461_2ch7property.F`
+log "SH Slot2 ch8                   : "`$CAGET -t MF1b1461_2ch8property.F`
+log "SH Slot2 ch9                   : "`$CAGET -t MF1b1461_2ch9property.F`
+log "SH Slot2 ch10                  : "`$CAGET -t MF1b1461_2ch10property.F`
+log "SH Slot2 ch11                  : "`$CAGET -t MF1b1461_2ch11property.F`
+log "SH Slot4 ch0                   : "`$CAGET -t MF1b1461_4ch0property.F`
+log "SH Slot4 ch1                   : "`$CAGET -t MF1b1461_4ch1property.F`
+log "SH Slot4 ch2                   : "`$CAGET -t MF1b1461_4ch2property.F`
+log "SH Slot4 ch3                   : "`$CAGET -t MF1b1461_4ch3property.F`
+log "SH Slot4 ch4                   : "`$CAGET -t MF1b1461_4ch4property.F`
+log "SH Slot4 ch5                   : "`$CAGET -t MF1b1461_4ch5property.F`
+log "SH Slot4 ch6                   : "`$CAGET -t MF1b1461_4ch6property.F`
+log "SH Slot4 ch7                   : "`$CAGET -t MF1b1461_4ch7property.F`
+log "SH Slot4 ch8                   : "`$CAGET -t MF1b1461_4ch8property.F`
+log "SH Slot4 ch9                   : "`$CAGET -t MF1b1461_4ch9property.F`
+log "SH Slot4 ch10                  : "`$CAGET -t MF1b1461_4ch10property.F`
+log "SH Slot4 ch11                  : "`$CAGET -t MF1b1461_4ch11property.F`
+log "SH Slot5 ch0                   : "`$CAGET -t MF1b1461_5ch0property.F`
+log "SH Slot5 ch1                   : "`$CAGET -t MF1b1461_5ch1property.F`
+log "SH Slot5 ch2                   : "`$CAGET -t MF1b1461_5ch2property.F`
+log "SH Slot5 ch3                   : "`$CAGET -t MF1b1461_5ch3property.F`
+log "SH Slot5 ch4                   : "`$CAGET -t MF1b1461_5ch4property.F`
+log "SH Slot5 ch5                   : "`$CAGET -t MF1b1461_5ch5property.F`
+log "SH Slot5 ch6                   : "`$CAGET -t MF1b1461_5ch6property.F`
+log "SH Slot5 ch7                   : "`$CAGET -t MF1b1461_5ch7property.F`
+log "SH Slot5 ch8                   : "`$CAGET -t MF1b1461_5ch8property.F`
+log "SH Slot5 ch9                   : "`$CAGET -t MF1b1461_5ch9property.F`
+log "SH Slot5 ch10                  : "`$CAGET -t MF1b1461_5ch10property.F`
+log "SH Slot5 ch11                  : "`$CAGET -t MF1b1461_5ch11property.F`
+log "SH Slot7 ch0                   : "`$CAGET -t MF1b1461_7ch0property.F`
+log "SH Slot7 ch1                   : "`$CAGET -t MF1b1461_7ch1property.F`
+log "SH Slot7 ch2                   : "`$CAGET -t MF1b1461_7ch2property.F`
+log "SH Slot7 ch3                   : "`$CAGET -t MF1b1461_7ch3property.F`
+log "SH Slot7 ch4                   : "`$CAGET -t MF1b1461_7ch4property.F`
+log "SH Slot7 ch5                   : "`$CAGET -t MF1b1461_7ch5property.F`
+log "SH Slot7 ch6                   : "`$CAGET -t MF1b1461_7ch6property.F`
+log "SH Slot7 ch7                   : "`$CAGET -t MF1b1461_7ch7property.F`
+log "SH Slot7 ch8                   : "`$CAGET -t MF1b1461_7ch8property.F`
+log "SH Slot7 ch9                   : "`$CAGET -t MF1b1461_7ch9property.F`
+log "SH Slot7 ch10                  : "`$CAGET -t MF1b1461_7ch10property.F`
+log "SH Slot7 ch11                  : "`$CAGET -t MF1b1461_7ch11property.F`
+log "SH Slot8 ch0                   : "`$CAGET -t MF1b1461_8ch0property.F`
+log "SH Slot8 ch1                   : "`$CAGET -t MF1b1461_8ch1property.F`
+log "SH Slot8 ch2                   : "`$CAGET -t MF1b1461_8ch2property.F`
+log "SH Slot8 ch3                   : "`$CAGET -t MF1b1461_8ch3property.F`
+log "SH Slot8 ch4                   : "`$CAGET -t MF1b1461_8ch4property.F`
+log "SH Slot8 ch5                   : "`$CAGET -t MF1b1461_8ch5property.F`
+log "SH Slot8 ch6                   : "`$CAGET -t MF1b1461_8ch6property.F`
+log "SH Slot8 ch7                   : "`$CAGET -t MF1b1461_8ch7property.F`
+log "SH Slot8 ch8                   : "`$CAGET -t MF1b1461_8ch8property.F`
+log "SH Slot8 ch9                   : "`$CAGET -t MF1b1461_8ch9property.F`
+log "SH Slot8 ch10                  : "`$CAGET -t MF1b1461_8ch10property.F`
+log "SH Slot8 ch11                  : "`$CAGET -t MF1b1461_8ch11property.F`
+log "SH Slot10 ch0                  : "`$CAGET -t MF1b1461_10ch0property.F`
+log "SH Slot10 ch1                  : "`$CAGET -t MF1b1461_10ch1property.F`
+log "SH Slot10 ch2                  : "`$CAGET -t MF1b1461_10ch2property.F`
+log "SH Slot10 ch3                  : "`$CAGET -t MF1b1461_10ch3property.F`
+log "SH Slot10 ch4                  : "`$CAGET -t MF1b1461_10ch4property.F`
+log "SH Slot10 ch5                  : "`$CAGET -t MF1b1461_10ch5property.F`
+log "SH Slot10 ch6                  : "`$CAGET -t MF1b1461_10ch6property.F`
+log "SH Slot10 ch7                  : "`$CAGET -t MF1b1461_10ch7property.F`
+log "SH Slot10 ch8                  : "`$CAGET -t MF1b1461_10ch8property.F`
+log "SH Slot10 ch9                  : "`$CAGET -t MF1b1461_10ch9property.F`
+log "SH Slot10 ch10                 : "`$CAGET -t MF1b1461_10ch10property.F`
+log "SH Slot10 ch11                 : "`$CAGET -t MF1b1461_10ch11property.F`
+log " -----"
+fi
+
+# Left Debugging
+if [ $TURNON22 -eq 1 ] ; then
+log "LVDT Position Ch1                       : "`$CAGET -t  HacL_lvdt1_raw.VAL`          
+log "LVDT Position Ch2                       : "`$CAGET -t  HacL_lvdt2_raw.VAL`
+log "LVDT Position Ch2                       : "`$CAGET -t  HacL_lvdt3_raw.VAL` 
+log "L_VMIC1182 for iocha18                  : "`$CAGET -t  Hac_VMIC1182ha18:Encoder`   
+fi
+
+# Right Debugging
+if [ $TURNON23 -eq 1 ] ; then
+log "RVDT Position Ch1                       : "`$CAGET -t  HacR_lvdt1_raw.VAL`          
+log "RVDT Position Ch2                       : "`$CAGET -t  HacR_lvdt2_raw.VAL`
+log "RVDT Position Ch2                       : "`$CAGET -t  HacR_lvdt3_raw.VAL` 
+log "R_VMIC1182 for iocha19                  : "`$CAGET -t  Hac_VMIC1182ha19:Encoder`       
+fi
+
+# Left det/Scint/S0 HV for PREX
+if [ $TURNON24L -eq 1 ] ; then
+log "Left Det/Scint/S0 HV"
+log "Upper Quartz                   : "`$CAGET -t  MF7b1461_2ch4property.F`
+log "Lower Quartz                   : "`$CAGET -t  MF7b1461_2ch2property.F`
+log "A_T Quartz                     : "`$CAGET -t  MF7b1461_2ch0property.F`
+log "Upper Scint                    : "`$CAGET -t  MF7b1461_2ch10property.F`
+log "Lower Scint                    : "`$CAGET -t  MF7b1461_1ch2property.F`
+log "S0 A                           : "`$CAGET -t  MF7b1461_13ch8property.F`
+log "S0 B                           : "`$CAGET -t  MF7b1461_13ch9property.F`
+log " -----"
+fi
+
+if [ $TURNON25 -eq 1 ] ; then
+log "Det Encoder Position for PREX"
+log "Left Main Det x                : "`$CAGET -t HacH_DTC_HPE1313A:0_Ch35`
+log "Left Main Det y                : "`$CAGET -t HacH_DTC_HPE1313A:0_Ch32`
+log "Right Main Det x               : "`$CAGET -t HacH_DTC_HPE1313A:0_Ch10`
+log "Right Main Det y               : "`$CAGET -t HacH_DTC_HPE1313A:0_Ch32`
+log " -----"
+fi
+
+if [ $TURNON26 -eq 1 ] ; then
+log "PREX Septum"
+log "Current Setpoint(Amps)                   : "`$CAGET -t MBIGBOX.S`
+log "Current Readback(Amps)                   : "`$CAGET -t MBIGBOXM`
+log " -----"
+fi
+
+## Log a uuencoded snapshot of the LHRS angle camera to event 135  (brads@jlab.org)
+#  Extract the image using /adaqfs/home/adaq/bin/get_coda_photos <runno>
+#/adaqfs/home/adaq/scripts/log_HRS_anglecam_snapshots
+
+## Log a BB HV data to event 134
+# /net/fs.home/adaq/scripts/HVBBlogger
+# cat /adaqfs/halla/adaq/epics/BB_hv.dat>> $epicsfile
+if [ $TURNON27 -eq 1 ] ; then 
+log " "
+log " "
+log "=== DVCS Calorimeter ==="
+log "Measured HV voltages"
+/adaqfs/home/adev/bin/hv_proc_dvcs_KJ.copy.com -D DVCS -c GET -P MV -m 0:12,0:15
+cat temp.dvcs >>  $epicsfile 
+log " "
+log "Measured HV currents"
+/adaqfs/home/adaq/dvcs3/slowc/hv_proc_dvcs_KJ.copy.com -D DVCS -c GET -P MC -m 0:12,0:15
+cat temp.dvcs >> $epicsfile 
+# remove all existing "temp" files
+rm -f  /adaqfs/home/adaq/scripts/temp.dvcs*
+log " "
+log "Measured HV for DVCS Cosmic paddels "
+/adaqfs/home/adaq/scripts/GetMeasuredHVCosmicPaddels.com >> $epicsfile 
+log " "
+log " "
+log "Measured anode currents:  "
+/adaqfs/home/adaq/scripts/GetMeasuredAnodeCurrents.com  >> $epicsfile
+fi
+
+# Read out the measure voltage values of the BB an HAND HV crates in the SRC (E07006) setup
+if [ $TURNON28 -eq 1 ] ; then
+echo "Veto Plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_V -c GET -m 1:2,1:32 -P MV >>$epicsfile
+echo "Plane 1">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_1 -c GET -m 1:2,1:30 -P MV >>$epicsfile
+echo "Plane 2">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_2 -c GET -m 1:2,1:24 -P MV >>$epicsfile
+echo "Plane 3">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_3 -c GET -m 1:2,1:22 -P MV >>$epicsfile
+echo "Plane 4">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_4 -c GET -m 1:2,1:12 -P MV >>$epicsfile
+echo "Plane 5">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_5 -c GET -m 1:2,1:12 -P MV >>$epicsfile
+echo "Plane 6">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_6 -c GET -m 1:2,1:12 -P MV >>$epicsfile
+echo "E plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D BB_E -c GET -m 1:2,1:24 -P MV >>$epicsfile
+echo "dE Plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D BB_dE -c GET -m 1:2,1:24 -P MV >>$epicsfile
+# Read out the measure current values of the BB an HAND HV crates in the SRC (E07006) setup
+echo "Veto Plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_V -c GET -m 1:2,1:32 -P MC >>$epicsfile
+echo "Plane 1">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_1 -c GET -m 1:2,1:30 -P MC >>$epicsfile
+echo "Plane 2">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_2 -c GET -m 1:2,1:24 -P MC >>$epicsfile
+echo "Plane 3">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_3 -c GET -m 1:2,1:22 -P MC >>$epicsfile
+echo "Plane 4">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_4 -c GET -m 1:2,1:12 -P MC >>$epicsfile
+echo "Plane 5">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_5 -c GET -m 1:2,1:12 -P MC >>$epicsfile
+echo "Plane 6">>$epicsfile
+~adev/bin/hv_proc_src.com -D NA_ND_6 -c GET -m 1:2,1:12 -P MC >>$epicsfile
+echo "E plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D BB_E -c GET -m 1:2,1:24 -P MC >>$epicsfile
+echo "dE Plane">>$epicsfile
+~adev/bin/hv_proc_src.com -D BB_dE -c GET -m 1:2,1:24 -P MC >>$epicsfile
+
+fi
+
+if [ $TURNON29 -eq 1 ] ; then
+log "Right septum current           : "`$CAGET -t  MBIGBOXM`
+log "Left septum current            : "`$CAGET -t  MITIRBCK`
+fi
+
+if [ $TURNON30 -eq 1 ] ; then
+log "Target In                      : "`$CAGET -t  HacB_VMIC1182:0_Ch32`
+log "Target Out                     : "`$CAGET -t  HacB_VMIC1182:0_Ch33`
+log "Helium Pressure                : "`$CAGET -t  HacB_VMIC1182:0_Ch34`
+fi
+
+if [ $TURNON31 -eq 1 ] ; then
+log "<b><h2>LHRS High Voltages</b></h2>"
+log "<table border =\"1\">"
+log "<tr>"
+log "<th>S0L</th>"
+log "<th>S0R</th>"
+log "<th>S2mL</th>"
+log "<th>S2mR</th>"
+log "<th>CerL</th>"
+log "<th>CerR</th>"
+log "<th>PRL1L</th>"
+log "<th>PRL1R</th>"
+log "<th>PRL2L</th>"
+log "<th>PRL2R</th>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D Cerenkov -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_alex_LEFT -DS0 -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS0 -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL2 -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 1,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DS2 -m 2,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DPRL1 -m 2,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DPRL2 -m 1,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DPRL2 -m 2,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>     </td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 1,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -D PRL1 -m 2,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DPRL2 -m 1,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_alex_LEFT -DPRL2 -m 2,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "</table>"
+fi
+
+if [ $TURNON32 -eq 1 ] ; then
+log "<b><h2>RHRS High Voltages</b></h2>"
+log "<table border =\"1\">"
+log "<tr>"
+log "<th>S0L</th>"
+log "<th>S0R</th>"
+log "<th>S2mL</th>"
+log "<th>S2mR</th>"
+log "<th>CerL</th>"
+log "<th>CerR</th>"
+log "<th>PSL</th>"
+log "<th>PSR</th>"
+log "<th>SH1</th>"
+log "<th>SH2</th>"
+log "<th>SH3</th>"
+log "<th>SH4</th>"
+log "<th>SH5</th>"
+log "<th>Lumi</th>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s0 -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s0 -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,1 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,2 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,3 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,4 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_gc -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,5 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s1 -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,6 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,7 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D Lumi -m 1,8 -c GET -P MV | gawk '{print $1}`"</td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,9 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,10 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,11 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,12 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,13 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,14 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 1,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 2,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 3,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 4,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_sh -m 5,15 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 1,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_s2m -m 2,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,16 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,17 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,18 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,18 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,19 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,19 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,20 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,20 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,21 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,21 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,22 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,22 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,23 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,23 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "<tr>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 1,24 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>"`hv_proc.com -D RHRS_ps -m 2,24 -c GET -P MV | gawk '{print $1}`"</td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "<td>      </td>"
+log "</tr>"
+log "</table>"
+fi
+
+if [ $TURNON33 -eq 1 ] ; then
+#/adaqfs/home/adaq/scripts/hvlog/GetRightHV >> $epicsfile
+#/adaqfs/home/adaq/scripts/hvlog/GetLeftHV_Longwu >> $epicsfile
+/adaqfs/home/adaq/scripts/hvlog/GetRightHV_Longwu >> $epicsfile
+fi
+
+
+#echo "Near the end "
+
+#echo "BigBite thresholds E dE(tdc) dE(trigger)">>  $epicsfile
+#tail -n 1 /net/fs.home/adaq/bbite/bin/log_camacthreshold.dat >>  $epicsfile
+
+# /net/fs.home/adaq/scripts/get_mwdc_thres >>  $epicsfile
+# /net/fs.home/adaq/scripts/get_bbshower_thres >>  $epicsfile
+# /net/fs.home/adaq/scripts/get_bbshower2_thres >>  $epicsfile
+# /net/fs.home/adaq/scripts/get_bbcer_thres >>  $epicsfile
+# /net/fs.home/adaq/scripts/get_bbscint_thres >>  $epicsfile
+# /net/fs.home/adaq/scripts/get_nd_thres >>  $epicsfile
+#log "CODA config                             : "`echo "select config from sessions\g"|msql adaq|gawk 'BEGIN {FS="|"}{print  $2"\n";}'`
+#log "HAPPEX run                             : "`echo "select runNumber from sessions where config='Transversity'\g"|msql parity|gawk 'BEGIN {FS="|"}{print  $2"\n";}'`
+#log "HAPPEX run                             : "`cat ~apar/datafile/rcRunNumber`
+#log "HAPPEX run                             : $num"
+cp $epicsfile $halogfile
+
+$HALOGCOM $halogfile "$keyword" 
+
+#echo "epicsRunStart:  script finished"
+
+#filling a mysql runtable
+#$SQLINSERTL | mysql -hadaqh1 -uadaq e04018 
+#$SQLINSERTR | mysql -hadaqh1 -uadaq e04018 
+#$SQLINSERTL | mysql -hadaqh1 -ucsr csr
+#$SQLINSERTR | mysql -hadaqh1 -ucsr csr 
+
+
+#filling the e04018runs table, elena
+#${HOME}/scripts/add_e04018runsum
+#echo "test for add_e04018runsum"
+
+#filling the e04018runs table, elena
+#${HOME}/scripts/add_e04018runsum
+#sleep 20
+#cat ${HOME}/scripts/add_e04018table.dat | mysql -hadaqh1 -uadaq e04018
+
+# This is sort of temporary, I want to log everything into logbook
+#log ""
+#log "Run Information:"
+#log ""
+#cat $RSTAFILE >> $epicsfile
+#comfile=`cat $RCOMFILE`
+#log "Using Type="
+#log $1
+#log ""
+#if [ -z "$1" ] ; then
+#    elog -l runliste -h clrlpc -p 8080 -x -a Author="Auto Submission from DAQ" -a Type="DVCS" -a Number=$num -a Subject="Start of Run" -f  $epicsfile "Information for run $num $comfile";
+#else
+#    elog -l runliste -h clrlpc -p 8080 -x -a Author="Auto Submission from DAQ" -a Type="$1" -a Number=$num -a Subject="Start of Run" -f  $epicsfile "Information for run $num $comfile";
+#fi
+
+
