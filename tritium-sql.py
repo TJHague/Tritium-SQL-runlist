@@ -25,12 +25,19 @@ except MySQLdb.Error:
   sys.exit(1)
 
 #######################################################
-# Parse dump file from start of run script here
-# Turn the raw info into an insert statement
+# Interact with the caget script to access
+#   epics variables
 #######################################################
 
-#define variables needed to go in database
-runnum = 0
+#Read in the run number from the rcRunNumber file
+runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumber","r")
+runnum = runnum_file.readline()
+runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
+runnum_file.close()
+
+#prep a query to request EPICS variables. Change the third value for a new request
+caget_query = ['/adaqfs/home/adaq/scrips/caget','-t','']
+
 start_time = ""
 end_time = ""
 target = ""
@@ -44,41 +51,6 @@ off_y = 0.0
 off_z = 0.0
 comment = ""
 insert_query = ""
-
-with open("sql.dat","r") as file:
-    data = file.readlines()
-
-#Loop over the lines looking for keywords to denote which variable is listed
-for line in data:
-    words = line.split()
-    if words[0]=="runnum":
-        runnum = words[1]
-    elif words[0]=="start_time":
-        start_time = words[1]
-    elif words[0]=="end_time":
-        end_time = words[1]
-    elif words[0]=="target":
-        target = words[1]
-    elif words[0]=="sieve":
-        sieve = words[1]
-    elif words[0]=="raster":
-        raster = words[1]
-    elif words[0]=="beam_energy":
-        beam_energy = words[1]
-    elif words[0]=="momentum":
-        momentum = words[1]
-    elif words[0]=="angle":
-        angle = words[1]
-    elif words[0]=="off_x":
-        off_x = words[1]
-    elif words[0]=="off_y":
-        off_y = words[1]
-    elif words[0]=="off_z":
-        off_z = words[1]
-    elif words[0]=="comment"
-        for com in words:
-            comment = comment + com
-
 
 #######################################################
 # Execute the insert statment
