@@ -12,14 +12,40 @@ import os
 import string
 import MySQLdb
 
-serverAddress = 'halladb.jlab.org'
+#Uncomment the current experiment so that the correct table is filled.
+EXP = "TEST"
+#EXP = "PRECOMMISSIONING"
+#EXP = "COMMISSIONING"
+#EXP = "MARATHON"
+#EXP = "SRC"
+#EXP = "EP"
+#EXP = "EK"
+
+if len(sys.argv)==2:
+    if argv[1]=='right':
+        right_arm = True
+    elif argv[1]=='left':
+        right_arm = False
+    else:
+        print 'The second argument must be \'right\' or \'left\''
+        sys.exit(1)
+else:
+    print 'Please specify if the code is being run for \'right\' or \'left\''
+    sys.exit(1)
+
+#Returns the value of the requested EPICS variable by interfacing with caget (a standalone script on adaq)
+def caget(EPICS_var):
+    caget_query = ['/adaqfs/home/adaq/scripts/caget','-t',EPICS_var]
+    caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE) #runs caget, first entry of caget_query is process. all following are args
+    ret, err = caget.communicate()
+    return ret.rstrip() #remove whitespace and \n characters
 
 #######################################################
 # Try connecting to the database. Exit if fail.
 #######################################################
 
 try:
-  db = MySQLdb.connect(host=serverAddress, user='triton', passwd='FakePassword', db=triton)
+  db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db=triton)
 except MySQLdb.Error:
   print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
   sys.exit(1)
@@ -30,60 +56,176 @@ except MySQLdb.Error:
 #######################################################
 
 #Read in the run number from the rcRunNumber file
-runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumber","r")
-runnum = runnum_file.readline()
-runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
-runnum_file.close()
+try:
+    if right_arm:
+        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumberR","r")
+    else:
+        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumber","r")
+    runnum = runnum_file.readline()
+    runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
+    runnum_file.close()
+except FileNotFoundError:
+    print 'Run Number not found by the MySQL script. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+    sys.exit(1) #Exit. Run number is the primary key, so an insert cannot be made without it
 
-run_type = ""
-
-#prep a query to request EPICS variables. Change the third value for a new request
-caget_query = ['/adaqfs/home/adaq/scripts/caget','-t','']
-
-start_time = ""
-end_time = ""
-
-caget_query[2]='haBDSSELECT' #this is the EPICS name for the variables requested
-caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE) #runs caget, first entry of caget_query is process. all following are args
-target, err = caget.communicate() #returns the output and error status
-target = target.rstrip()
-
-raster_x = 0
-raster_y = 0
-
-caget_query[2]='MMSHLAE'
-caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-beam_energy, err = caget.communicate()
-beam_energy = beam_energy.rstrip()
-
-if runnum>=90000:
-    caget_query[2]='HacR_D1_P0rb'
-else:
-    caget_query[2]='HacL_D1_P0rb'
-caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-momentum, err = caget.communicate()
-momentum = momentum.rstrip()
-
-if runnum>=90000:
-    caget_query[2]='HacR_alignAGL'
-else:
-    caget_query[2]='HacL_alignAGL'
-caget = subprocess.Popen(caget_query, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-angle, err = caget.communicate()
-angle = angle.rstrip()
-
-prescaleT1
-prescaleT2
-prescaleT3
-prescaleT4
-prescaleT5
-prescaleT6
-prescaleT7
-prescaleT8
-
-#For comment, need to parse RUN_INFO_L.TITLE_COL line 3 after comment_text=
+#Get Run Type and Run Comments from the title file
+runtype = "" #If something goes wrong with generating/reading this file default to blank
 comment = ""
-insert_query = ""
+try:
+    if right_arm:
+        title_file = open("/adaqfs/home/adaq/scripts/RUN_INFO_R.TITLE_COL","r")
+    else:
+        title_file = open("/adaqfs/home/adaq/scripts/RUN_INFO_L.TITLE_COL","r")
+    for line in title_file:
+        if line.startswith("Run_type="):
+            run_type = line[9:].rstrip()
+        if line.startswith("comment_text"):
+            comment = line[12:].rstrip()
+    title_file.close()
+except FileNotFoundError:
+    print 'Title file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+
+#Get variables from epics
+target = caget('haBDSSELECT')
+raster_x = caget('EHAR_LIXWidth')
+raster_y = caget('EHAR_LIYWidth')
+beam_energy = caget('MMSHLAE')
+if right_arm:
+    momentum = caget('HacR_D1_P0rb')
+else:
+    momentum = caget('HacL_D1_P0rb')
+if right_arm:
+    angle = caget('HacR_alignAGL')
+else:
+    angle = caget('HacL_alignAGL')
+
+#set columns to NULL if something goes wrong
+prescaleT1 = "NULL"
+prescaleT2 = "NULL"
+prescaleT3 = "NULL"
+prescaleT4 = "NULL"
+prescaleT5 = "NULL"
+prescaleT6 = "NULL"
+prescaleT7 = "NULL"
+prescaleT8 = "NULL"
+
+#Read in prescale values from the generated prescale files
+try:
+    if right_arm:
+        prescale_file = open("/adaqfs/home/adaq/prescale/prescaleR.dat","r")
+    else:
+        prescale_file = open("/adaqfs/home/adaq/prescale/prescaleL.dat","r")
+    for line in prescale_file:
+        if line.startswith("ps1="):
+            length = line.len() #Just in case file is misformatted
+            i=4
+#in hindsight, this next part would do better as a function.
+            while i<length and line[i].isdigit():
+                if prescaleT1 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT1 = line[i]
+                else:
+                    prescaleT1 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT2 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT2 = line[i]
+                else:
+                    prescaleT2 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT3 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT3 = line[i]
+                else:
+                    prescaleT3 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT4 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT4 = line[i]
+                else:
+                    prescaleT4 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT5 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT5 = line[i]
+                else:
+                    prescaleT5 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT6 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT6 = line[i]
+                else:
+                    prescaleT6 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT7 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT7 = line[i]
+                else:
+                    prescaleT7 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+            while i<length and line[i].isdigit():
+                if prescaleT8 == "NULL"  #overwrite NULL if we get this far
+                    prescaleT8 = line[i]
+                else:
+                    prescaleT8 += line[i]
+                i += 1
+            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
+                i += 1
+except FileNotFoundError:
+    print 'Prescale file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+
+insert_query = "INSERT INTO " + EXP + "runlist("
+insert_query += "run_number, "
+insert_query += "run_type, "
+insert_query += "start_time, "
+insert_query += "target, "
+insert_query += "raster_x, "
+insert_query += "raster_y, "
+insert_query += "beam_energy, "
+insert_query += "momentum, "
+insert_query += "angle, "
+insert_query += "prescale_T1, "
+insert_query += "prescale_T2, "
+insert_query += "prescale_T3, "
+insert_query += "prescale_T4, "
+insert_query += "prescale_T5, "
+insert_query += "prescale_T6, "
+insert_query += "prescale_T7, "
+insert_query += "prescale_T8, "
+insert_query += "comment) "
+insert_query += "VALUES( "
+insert_query += runnum + ", "
+insert_query += "\"" + run_type "\", "
+insert_query += "NOW(), "
+insert_query += "\"" + target + "\", "
+insert_query += raster_x + ", "
+insert_query += raster_y + ", "
+insert_query += beam_energy + ", "
+insert_query += momentum + ", "
+insert_query += angle + ", "
+insert_query += prescale_T1 + ", "
+insert_query += prescale_T2 + ", "
+insert_query += prescale_T3 + ", "
+insert_query += prescale_T4 + ", "
+insert_query += prescale_T5 + ", "
+insert_query += prescale_T6 + ", "
+insert_query += prescale_T7 + ", "
+insert_query += prescale_T8 + ", "
+insert_query += "\"" + comment + "\") "
+
 
 #######################################################
 # Execute the insert statment
