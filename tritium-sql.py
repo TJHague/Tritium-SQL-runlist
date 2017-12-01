@@ -65,7 +65,7 @@ try:
     runnum = runnum_file.readline()
     runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
     runnum_file.close()
-except FileNotFoundError:
+except IOError:
     print 'Run Number not found by the MySQL script. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
     sys.exit(1) #Exit. Run number is the primary key, so an insert cannot be made without it
 
@@ -80,10 +80,10 @@ try:
     for line in title_file:
         if line.startswith("Run_type="):
             run_type = line[9:].rstrip()
-        if line.startswith("comment_text"):
-            comment = line[12:].rstrip()
+        if line.startswith("comment_text="):
+            comment = line[13:].rstrip()
     title_file.close()
-except FileNotFoundError:
+except IOError:
     print 'Title file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
 
 #Get variables from epics
@@ -118,7 +118,7 @@ try:
         prescale_file = open("/adaqfs/home/adaq/prescale/prescaleL.dat","r")
     for line in prescale_file:
         if line.startswith("ps1="):
-            length = line.len() #Just in case file is misformatted
+            length = len(line) #Just in case file is misformatted
             i=4
 #in hindsight, this next part would do better as a function.
             while i<length and line[i].isdigit():
@@ -185,7 +185,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
-except FileNotFoundError:
+except IOError:
     print 'Prescale file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
 
 insert_query = "INSERT INTO " + EXP + "runlist("
@@ -217,14 +217,14 @@ insert_query += raster_y + ", "
 insert_query += beam_energy + ", "
 insert_query += momentum + ", "
 insert_query += angle + ", "
-insert_query += prescale_T1 + ", "
-insert_query += prescale_T2 + ", "
-insert_query += prescale_T3 + ", "
-insert_query += prescale_T4 + ", "
-insert_query += prescale_T5 + ", "
-insert_query += prescale_T6 + ", "
-insert_query += prescale_T7 + ", "
-insert_query += prescale_T8 + ", "
+insert_query += prescaleT1 + ", "
+insert_query += prescaleT2 + ", "
+insert_query += prescaleT3 + ", "
+insert_query += prescaleT4 + ", "
+insert_query += prescaleT5 + ", "
+insert_query += prescaleT6 + ", "
+insert_query += prescaleT7 + ", "
+insert_query += prescaleT8 + ", "
 insert_query += "\"" + comment + "\") "
 
 
