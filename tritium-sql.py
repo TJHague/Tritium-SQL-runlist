@@ -1,4 +1,4 @@
-  1#!/usr/bin/python
+#!/usr/bin/python
 
 #######################################################
 # A python script to insert run information into the
