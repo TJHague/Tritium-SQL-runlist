@@ -86,4 +86,4 @@ update_query = "UPDATE " + EXP + "runlist SET end_time=NOW() WHERE run_number=" 
 cursor.execute(update_query)
 
 #print insert_query
-print 'Successfully inserted into the MySQL run list! Have an awesome shift!'
+print 'Successfully updated the MySQL run list! Have an awesome shift!'
