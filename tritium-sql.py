@@ -41,6 +41,19 @@ def caget(EPICS_var):
     ret, err = caget.communicate()
     return ret.rstrip() #remove whitespace and \n characters
 
+#Read in the run number from the rcRunNumber file
+try:
+    if right_arm:
+        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumberR","r")
+    else:
+        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumber","r")
+    runnum = runnum_file.readline()
+    runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
+    runnum_file.close()
+except IOError:
+    print 'Run Number not found by the MySQL script. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+    sys.exit(1) #Exit. Run number is the primary key, so an insert cannot be made without it
+
 #######################################################
 # Try connecting to the database. Exit if fail.
 #######################################################
@@ -76,19 +89,6 @@ if nEvtAll>0:
 # Interact with the caget script to access
 #   epics variables
 #######################################################
-
-#Read in the run number from the rcRunNumber file
-try:
-    if right_arm:
-        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumberR","r")
-    else:
-        runnum_file = open("/adaqfs/home/adaq/datafile/rcRunNumber","r")
-    runnum = runnum_file.readline()
-    runnum = runnum.rstrip() #Removes \n end of line character and any trailing whitespace. There shouldn't be any in this case, but just in case
-    runnum_file.close()
-except IOError:
-    print 'Run Number not found by the MySQL script. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
-    sys.exit(1) #Exit. Run number is the primary key, so an insert cannot be made without it
 
 #Get Run Type and Run Comments from the title file
 runtype = "" #If something goes wrong with generating/reading this file default to blank
