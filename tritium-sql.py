@@ -11,6 +11,7 @@ import sys
 import os
 import string
 import MySQLdb
+import subprocess
 
 #Uncomment the current experiment so that the correct table is filled.
 EXP = "TEST"
