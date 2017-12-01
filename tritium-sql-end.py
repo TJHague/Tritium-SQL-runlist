@@ -13,8 +13,8 @@ import string
 import MySQLdb
 
 #Uncomment the current experiment so that the correct table is filled.
-EXP = "TEST"
-#EXP = "PRECOMMISSIONING"
+#EXP = "TEST"
+EXP = "PRECOMMISSIONING"
 #EXP = "COMMISSIONING"
 #EXP = "MARATHON"
 #EXP = "SRC"
