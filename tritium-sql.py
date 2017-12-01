@@ -1,4 +1,4 @@
-#!/usr/bin/python
+  1#!/usr/bin/python
 
 #######################################################
 # A python script to insert run information into the
@@ -14,8 +14,8 @@ import MySQLdb
 import subprocess
 
 #Uncomment the current experiment so that the correct table is filled.
-EXP = "TEST"
-#EXP = "PRECOMMISSIONING"
+#EXP = "TEST"
+EXP = "PRECOMMISSIONING"
 #EXP = "COMMISSIONING"
 #EXP = "MARATHON"
 #EXP = "SRC"
