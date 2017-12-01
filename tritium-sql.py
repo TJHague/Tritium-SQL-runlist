@@ -52,6 +52,27 @@ except MySQLdb.Error:
   sys.exit(1)
 
 #######################################################
+# Ensure that the run number does not exist in the
+#   table already. Runnum is a unique key.
+#######################################################
+
+cursor = db.cursor()
+
+unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
+
+#Get number of entries with the current run number as a uniqueness test
+#Exit if not unique
+
+cursor.execute(unique_test)
+Evts = cursor.fetchall()
+evtAll = [Evt[0] for Evt in Evts]
+nEvtAll = len(evtAll)
+
+if nEvtAll>0:
+  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run nimber this message appeared on.'
+  sys.exit(1)
+
+#######################################################
 # Interact with the caget script to access
 #   epics variables
 #######################################################
@@ -235,27 +256,9 @@ insert_query += "\"" + comment + "\") "
 
 #######################################################
 # Execute the insert statment
-# Ensure that the run number does not exist in the
-#   table already. Runnum is a unique key.
 #######################################################
-
-cursor = db.cursor()
-
-unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
-
-#Get number of entries with the current run number as a uniqueness test
-#Exit if not unique
-
-cursor.execute(unique_test)
-Evts = cursor.fetchall()
-evtAll = [Evt[0] for Evt in Evts]
-nEvtAll = len(evtAll)
-
-if nEvtAll>0:
-  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run nimber this message appeared on.'
-  sys.exit(1)
 
 cursor.execute(insert_query)
 
-print insert_query
+#print insert_query
 print 'Successfully inserted into the MySQL run list! Have an awesome shift!'
