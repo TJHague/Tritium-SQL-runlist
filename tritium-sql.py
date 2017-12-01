@@ -129,6 +129,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT2 == "NULL":  #overwrite NULL if we get this far
                     prescaleT2 = line[i]
@@ -137,6 +138,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT3 == "NULL":  #overwrite NULL if we get this far
                     prescaleT3 = line[i]
@@ -145,6 +147,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT4 == "NULL":  #overwrite NULL if we get this far
                     prescaleT4 = line[i]
@@ -153,6 +156,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT5 == "NULL":  #overwrite NULL if we get this far
                     prescaleT5 = line[i]
@@ -161,6 +165,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT6 == "NULL":  #overwrite NULL if we get this far
                     prescaleT6 = line[i]
@@ -169,6 +174,7 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT7 == "NULL":  #overwrite NULL if we get this far
                     prescaleT7 = line[i]
@@ -177,13 +183,12 @@ try:
                 i += 1
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
+            i += 1
             while i<length and line[i].isdigit():
                 if prescaleT8 == "NULL":  #overwrite NULL if we get this far
                     prescaleT8 = line[i]
                 else:
                     prescaleT8 += line[i]
-                i += 1
-            while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
 except IOError:
     print 'Prescale file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
