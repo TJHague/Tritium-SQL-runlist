@@ -121,7 +121,7 @@ try:
             i=4
 #in hindsight, this next part would do better as a function.
             while i<length and line[i].isdigit():
-                if prescaleT1 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT1 == "NULL":  #overwrite NULL if we get this far
                     prescaleT1 = line[i]
                 else:
                     prescaleT1 += line[i]
@@ -129,7 +129,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT2 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT2 == "NULL":  #overwrite NULL if we get this far
                     prescaleT2 = line[i]
                 else:
                     prescaleT2 += line[i]
@@ -137,7 +137,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT3 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT3 == "NULL":  #overwrite NULL if we get this far
                     prescaleT3 = line[i]
                 else:
                     prescaleT3 += line[i]
@@ -145,7 +145,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT4 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT4 == "NULL":  #overwrite NULL if we get this far
                     prescaleT4 = line[i]
                 else:
                     prescaleT4 += line[i]
@@ -153,7 +153,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT5 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT5 == "NULL":  #overwrite NULL if we get this far
                     prescaleT5 = line[i]
                 else:
                     prescaleT5 += line[i]
@@ -161,7 +161,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT6 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT6 == "NULL":  #overwrite NULL if we get this far
                     prescaleT6 = line[i]
                 else:
                     prescaleT6 += line[i]
@@ -169,7 +169,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT7 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT7 == "NULL":  #overwrite NULL if we get this far
                     prescaleT7 = line[i]
                 else:
                     prescaleT7 += line[i]
@@ -177,7 +177,7 @@ try:
             while i<length and line[i]!='=': #Scan until the next equal sign. Doing this as opposed to i+=5 to make this safe for minor formatting changes in the prescale file
                 i += 1
             while i<length and line[i].isdigit():
-                if prescaleT8 == "NULL"  #overwrite NULL if we get this far
+                if prescaleT8 == "NULL":  #overwrite NULL if we get this far
                     prescaleT8 = line[i]
                 else:
                     prescaleT8 += line[i]
