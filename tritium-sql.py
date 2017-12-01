@@ -46,7 +46,7 @@ def caget(EPICS_var):
 #######################################################
 
 try:
-  db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db=triton)
+  db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db="triton")
 except MySQLdb.Error:
   print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
   sys.exit(1)
