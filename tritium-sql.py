@@ -22,9 +22,9 @@ EXP = "TEST"
 #EXP = "EK"
 
 if len(sys.argv)==2:
-    if argv[1]=='right':
+    if sys.argv[1]=='right':
         right_arm = True
-    elif argv[1]=='left':
+    elif sys.argv[1]=='left':
         right_arm = False
     else:
         print 'The second argument must be \'right\' or \'left\''
