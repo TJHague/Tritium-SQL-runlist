@@ -241,8 +241,7 @@ insert_query += "\"" + comment + "\") "
 
 cursor = db.cursor()
 
-unique_test = "SELECT run_number FROM run_list where run_number="
-unique_test = unique_test + runnum
+unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
 
 #Get number of entries with the current run number as a uniqueness test
 #Exit if not unique
