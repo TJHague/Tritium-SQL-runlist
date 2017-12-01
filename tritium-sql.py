@@ -82,7 +82,7 @@ evtAll = [Evt[0] for Evt in Evts]
 nEvtAll = len(evtAll)
 
 if nEvtAll>0:
-  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run nimber this message appeared on.'
+  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
   sys.exit(1)
 
 #######################################################
