@@ -55,7 +55,7 @@ try:
     found = False
     end_comment = ''
     for line in comment_file:
-        if !found:
+        if not found:
             i = 0
             for i<(len(line)-12):
                 if line[i:i+12]=="comment_text=":
