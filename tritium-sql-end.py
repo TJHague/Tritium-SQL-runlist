@@ -51,16 +51,17 @@ try:
     if right_arm:
         comment_file = open("/adaqfs/home/adaq/scripts/.runendR.comments","r")
     else:
-        comment_file = open("/adaqfs/home/adaq/scripts/.runendR.comments","r")
+        comment_file = open("/adaqfs/home/adaq/scripts/.runendL.comments","r")
     found = False
     end_comment = ''
     for line in comment_file:
         if not found:
             i = 0
-            for i<(len(line)-12):
-                if line[i:i+12]=="comment_text=":
+            while i<(len(line)-13) and not found:
+                if line[i:i+13]=="comment_text=":
                     found = True
                     end_comment = line[i+13:].rstrip() + ' '
+                i += 1
         else:
             end_comment += line.rstrip() + ' '
     end_comment = end_comment.rstrip()
