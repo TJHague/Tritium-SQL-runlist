@@ -46,6 +46,27 @@ except IOError:
     print 'Run Number not found by the MySQL script. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
     sys.exit(1) #Exit. Run number is the primary key, so an insert cannot be made without it
 
+#Exctract the end of run comment
+try:
+    if right_arm:
+        comment_file = open("/adaqfs/home/adaq/scripts/.runendR.comments","r")
+    else:
+        comment_file = open("/adaqfs/home/adaq/scripts/.runendR.comments","r")
+    found = False
+    end_comment = ''
+    for line in comment_file:
+        if !found:
+            i = 0
+            for i<(len(line)-12):
+                if line[i:i+12]=="comment_text=":
+                    found = True
+                    end_comment = line[i+13:].rstrip() + ' '
+        else:
+            end_comment += line.rstrip() + ' '
+    end_comment = end_comment.rstrip()
+except IOError:
+    print 'The end of run comment file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+
 #######################################################
 # Try connecting to the database. Exit if fail.
 #######################################################
@@ -74,14 +95,14 @@ evtAll = [Evt[0] for Evt in Evts]
 nEvtAll = len(evtAll)
 
 if nEvtAll==0:
-  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+  print 'This run number does not exist in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
   sys.exit(1)
 
 #######################################################
 # Create and execute update statement
 #######################################################
 
-update_query = "UPDATE " + EXP + "runlist SET end_time=NOW() WHERE run_number=" + runnum
+update_query = "UPDATE " + EXP + "runlist SET end_time=NOW(), end_comment=\"" + end_comment + "\" WHERE run_number=" + runnum
 
 cursor.execute(update_query)
 
