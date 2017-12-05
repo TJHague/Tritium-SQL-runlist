@@ -108,10 +108,40 @@ except IOError:
     print 'Title file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
 
 #Get variables from epics
-target = caget('haBDSSELECT')
+target_encoder = caget('haBDSPOS.VAL')
 raster_x = caget('EHAR_LIXWidth')
 raster_y = caget('EHAR_LIYWidth')
 beam_energy = caget('MMSHLAE')
+
+#Determine target from encoder value
+target = "Home (No Target)"
+if abs(33307200.00-float(target_encoder))<50.0:
+    target = "Tritium"
+elif abs(29563200.00-float(target_encoder))<50.0:
+    target = "Deuterium"
+elif abs(25798720.00-float(target_encoder))<50.0:
+    target = "Hydrogen"
+elif abs(22059840.00-float(target_encoder))<50.0:
+    target = "Helium-3"
+elif abs(18300480.00-float(target_encoder))<50.0:
+    target = "Empty Cell"
+elif abs(15376182.00-float(target_encoder))<50.0:
+    target = "25 cm Dummy"
+elif abs(14595894.00-float(target_encoder))<50.0:
+    target = "Optics"
+elif abs(13295414.00-float(target_encoder))<50.0:
+    target = "Carbon Hole"
+elif abs(12563253.00-float(target_encoder))<50.0:
+    target = "Raster Target"
+elif abs(11929910.00-float(target_encoder))<50.0:
+    target = "Thick Aluminum"
+elif abs(11214646.00-float(target_encoder))<50.0:
+    target = "Carbon"
+elif abs(10499382.00-float(target_encoder))<50.0:
+    target = "Titanium"
+elif abs(9784118.00-float(target_encoder))<50.0:
+    target = "BeO"
+
 if right_arm:
     momentum = caget('HacR_D1_P0rb')
 else:
