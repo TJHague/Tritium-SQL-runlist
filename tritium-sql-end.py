@@ -21,6 +21,8 @@ EXP = "PRECOMMISSIONING"
 #EXP = "EP"
 #EXP = "EK"
 
+DEBUG = False
+
 if len(sys.argv)==2:
     if sys.argv[1]=='right':
         right_arm = True
@@ -49,33 +51,33 @@ except IOError:
 #######################################################
 # Try connecting to the database. Exit if fail.
 #######################################################
-
-try:
-  db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db="triton")
-except MySQLdb.Error:
-  print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
-  sys.exit(1)
+if not DEBUG:
+    try:
+        db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db="triton")
+    except MySQLdb.Error:
+        print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
 
 #######################################################
 # Ensure that the run number exists in the table
 #   We are updating the entry.
 #######################################################
+if not DEBUG:
+    cursor = db.cursor()
+    
+    unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
+    
+    #Get number of entries with the current run number as a uniqueness test
+    #Exit if not unique
+    
+    cursor.execute(unique_test)
+    Evts = cursor.fetchall()
+    evtAll = [Evt[0] for Evt in Evts]
+    nEvtAll = len(evtAll)
 
-cursor = db.cursor()
-
-unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
-
-#Get number of entries with the current run number as a uniqueness test
-#Exit if not unique
-
-cursor.execute(unique_test)
-Evts = cursor.fetchall()
-evtAll = [Evt[0] for Evt in Evts]
-nEvtAll = len(evtAll)
-
-if nEvtAll==0:
-  print 'This run number does not exist in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
-  sys.exit(1)
+    if nEvtAll==0:
+        print 'This run number does not exist in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
 
 #######################################################
 # Extract end of run info to update the database
@@ -106,34 +108,49 @@ except IOError:
 
 #Extract time, events, trigger totals, and charge
 try:
-    halog_com = open("/adaqfs/home/adaq/epics/runfiles_ar40/halog_com_" + runnum + ".epics","r")
+    if right_arm:
+        halog_com = open("/adaqfs/home/adaq/epics/runfiles_ar40/halog_com_" + runnum + ".epics","r")
+    else:
+        halog_com = open("/adaqfs/home/adaq/epics/runfiles_gmp_l/halog_com_" + runnum + ".epics","r")
     for line in halog_com:
         if line.startswith("EVENTS   : "):
-           events = line[11:]
-        if line.startswith("TIME     : "):
-            time = line[11:]
-        if line.startswith("TRIGGER TOTALS:"):
+           events = line[11:].rstrip()
+        elif line.startswith("TIME     : "):
+            i = 11
+            time = ''
+            while line[i].isdigit() or line[i]=='.':
+                time += line[i]
+                i += 1
+        elif line.startswith("TRIGGER TOTALS:"):
             found_triggers = True
-        if found_triggers:
+        elif found_triggers:
+            i = -1
+            triggers = ['' for _ in range(8)]
+            fill = False
             for c in line:
-                i=-1
                 if c==':':
-                    triggers[i] = ''
                     i += 1
-                if c.isdigit():
+                    fill = True
+                elif c.isdigit() and fill:
                     triggers[i] += c
+                elif c=='.':
+                    fill = False
             found_triggers = False
-        if line.startswith("APPROXIMATE BCM CHARGES"):
+        elif line.startswith("APPROXIMATE BCM CHARGES"):
             found_charge = True
-        if found_charge:
+        elif found_charge:
             i = 0
             charge = ''
-            if line[i:i+6] == 'Unser:':
-                i=i+7
-                if line[i].isdigit() or line[i]=='.' and not charge_done:
+            fill = False
+            while i<len(line):
+                if line[i:i+6] == 'Unser:':
+                    i=i+7
+                    fill = True
+                if (line[i].isdigit() or line[i]=='.') and fill:
                     charge += line[i]
                 else:
-                    charge_done = True
+                    fill = False
+                i += 1
             found_charge = False
     halog_com.close()
 except IOError:
@@ -147,17 +164,20 @@ update_query = "UPDATE " + EXP + "runlist SET end_time=NOW(), end_comment=\"" + 
 update_query += "events=" + events + ", "
 update_query += "time_mins=" + time + ", "
 update_query += "charge=" + charge + ", "
-update_query += "T1_count=" + triggers[1] + ", "
-update_query += "T2_count=" + triggers[2] + ", "
-update_query += "T3_count=" + triggers[3] + ", "
-update_query += "T4_count=" + triggers[4] + ", "
-update_query += "T5_count=" + triggers[5] + ", "
-update_query += "T6_count=" + triggers[6] + ", "
-update_query += "T7_count=" + triggers[7] + ", "
-update_query += "T8_count=" + triggers[8] + " "
+update_query += "T1_count=" + triggers[0] + ", "
+update_query += "T2_count=" + triggers[1] + ", "
+update_query += "T3_count=" + triggers[2] + ", "
+update_query += "T4_count=" + triggers[3] + ", "
+update_query += "T5_count=" + triggers[4] + ", "
+update_query += "T6_count=" + triggers[5] + ", "
+update_query += "T7_count=" + triggers[6] + ", "
+update_query += "T8_count=" + triggers[7] + " "
 update_query += "WHERE run_number=" + runnum
 
-cursor.execute(update_query)
+if not DEBUG:
+    cursor.execute(update_query)
+else:
+    print update_query
 
 #print insert_query
 print 'Successfully updated the MySQL run list! Have an awesome shift!'
