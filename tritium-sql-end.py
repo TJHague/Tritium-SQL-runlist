@@ -107,6 +107,8 @@ except IOError:
     print 'The end of run comment file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
 
 #Extract time, events, trigger totals, and charge
+triggers = ['' for _ in range(8)]
+charge = ''
 try:
     if right_arm:
         halog_com = open("/adaqfs/home/adaq/epics/runfiles_ar40/halog_com_" + runnum + ".epics","r")
@@ -127,7 +129,6 @@ try:
             found_triggers = True
         elif found_triggers:
             i = -1
-            triggers = ['' for _ in range(8)]
             fill = False
             for c in line:
                 if c==':':
@@ -142,7 +143,6 @@ try:
             found_charge = True
         elif found_charge:
             i = 0
-            charge = ''
             fill = False
             while i<len(line):
                 if line[i:i+6] == 'Unser:':
