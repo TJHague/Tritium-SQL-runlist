@@ -112,6 +112,8 @@ try:
         halog_com = open("/adaqfs/home/adaq/epics/runfiles_ar40/halog_com_" + runnum + ".epics","r")
     else:
         halog_com = open("/adaqfs/home/adaq/epics/runfiles_gmp_l/halog_com_" + runnum + ".epics","r")
+    found_triggers = False
+    found_charge = False
     for line in halog_com:
         if line.startswith("EVENTS   : "):
            events = line[11:].rstrip()
