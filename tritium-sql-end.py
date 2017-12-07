@@ -163,7 +163,7 @@ except IOError:
 #######################################################
 
 update_query = "UPDATE " + EXP + "runlist SET end_time=NOW(), end_comment=\"" + end_comment + "\", "
-update_query += "events=" + events + ", "
+update_query += "event_count=" + events + ", "
 update_query += "time_mins=" + time + ", "
 update_query += "charge=" + charge + ", "
 update_query += "T1_count=" + triggers[0] + ", "
