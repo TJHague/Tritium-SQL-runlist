@@ -109,6 +109,8 @@ except IOError:
 #Extract time, events, trigger totals, and charge
 triggers = ['' for _ in range(8)]
 charge = ''
+time = ''
+events = ''
 try:
     if right_arm:
         halog_com = open("/adaqfs/home/adaq/epics/runfiles_tritium_R/halog_com_" + runnum + ".epics","r")
@@ -121,7 +123,6 @@ try:
            events = line[11:].rstrip()
         elif line.startswith("TIME     : "):
             i = 11
-            time = ''
             while line[i].isdigit() or line[i]=='.':
                 time += line[i]
                 i += 1
