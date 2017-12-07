@@ -111,9 +111,9 @@ triggers = ['' for _ in range(8)]
 charge = ''
 try:
     if right_arm:
-        halog_com = open("/adaqfs/home/adaq/epics/runfiles_ar40/halog_com_" + runnum + ".epics","r")
+        halog_com = open("/adaqfs/home/adaq/epics/runfiles_tritium_R/halog_com_" + runnum + ".epics","r")
     else:
-        halog_com = open("/adaqfs/home/adaq/epics/runfiles_gmp_l/halog_com_" + runnum + ".epics","r")
+        halog_com = open("/adaqfs/home/adaq/epics/runfiles_tritium_L/halog_com_" + runnum + ".epics","r")
     found_triggers = False
     found_charge = False
     for line in halog_com:
