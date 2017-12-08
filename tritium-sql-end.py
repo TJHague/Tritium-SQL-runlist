@@ -70,7 +70,7 @@ if not DEBUG:
 #######################################################
 if not DEBUG:
     cursor = db.cursor()
-    cursor2 = db.cursor()
+    cursor2 = db2.cursor()
     
     unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
     
