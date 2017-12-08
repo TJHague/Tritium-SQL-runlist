@@ -107,10 +107,10 @@ except IOError:
     print 'The end of run comment file seems to be missing. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
 
 #Extract time, events, trigger totals, and charge
-triggers = ['' for _ in range(8)]
-charge = ''
-time = ''
-events = ''
+triggers = ['NULL' for _ in range(8)]
+charge = 'NULL'
+time = 'NULL'
+events = 'NULL'
 try:
     if right_arm:
         halog_com = open("/adaqfs/home/adaq/epics/runfiles_tritium_R/halog_com_" + runnum + ".epics","r")
@@ -120,9 +120,11 @@ try:
     found_charge = False
     for line in halog_com:
         if line.startswith("EVENTS   : "):
-           events = line[11:].rstrip()
+            events = ''
+            events = line[11:].rstrip()
         elif line.startswith("TIME     : "):
             i = 11
+            time = ''
             while line[i].isdigit() or line[i]=='.':
                 time += line[i]
                 i += 1
@@ -135,9 +137,13 @@ try:
                 if c==':':
                     i += 1
                     fill = True
+                    triggers[i] = ''
                 elif c.isdigit() and fill:
                     triggers[i] += c
-                elif c=='.':
+                elif c=='-' and fill:
+                    triggers[i] = 'NULL'
+                    fill = False
+                else:
                     fill = False
             found_triggers = False
         elif line.startswith("APPROXIMATE BCM CHARGES"):
@@ -149,8 +155,12 @@ try:
                 if line[i:i+6] == 'Unser:':
                     i=i+7
                     fill = True
-                if (line[i].isdigit() or line[i]=='.') and fill:
+                    charge = ''
+                elif (line[i].isdigit() or line[i]=='.') and fill:
                     charge += line[i]
+                elif line[i]=='-' and fill:
+                    charge = 'NULL'
+                    fill = False
                 else:
                     fill = False
                 i += 1
