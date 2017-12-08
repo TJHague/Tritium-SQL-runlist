@@ -57,6 +57,12 @@ if not DEBUG:
     except MySQLdb.Error:
         print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
         sys.exit(1)
+    try:
+        db2 = MySQLdb.connect(host='halladb.jlab.org', user='triton-user', passwd='FalsePw', db="triton-work")
+    except MySQLdb.Error:
+        print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
+
 
 #######################################################
 # Ensure that the run number exists in the table
@@ -64,6 +70,7 @@ if not DEBUG:
 #######################################################
 if not DEBUG:
     cursor = db.cursor()
+    cursor2 = db.cursor()
     
     unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
     
@@ -72,6 +79,15 @@ if not DEBUG:
     
     cursor.execute(unique_test)
     Evts = cursor.fetchall()
+    evtAll = [Evt[0] for Evt in Evts]
+    nEvtAll = len(evtAll)
+
+    if nEvtAll==0:
+        print 'This run number does not exist in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
+    
+    cursor2.execute(unique_test)
+    Evts = cursor2.fetchall()
     evtAll = [Evt[0] for Evt in Evts]
     nEvtAll = len(evtAll)
 
@@ -189,6 +205,7 @@ update_query += "WHERE run_number=" + runnum
 
 if not DEBUG:
     cursor.execute(update_query)
+    cursor2.execute(update_query)
 else:
     print update_query
 

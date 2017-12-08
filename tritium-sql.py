@@ -22,6 +22,8 @@ EXP = "PRECOMMISSIONING"
 #EXP = "EP"
 #EXP = "EK"
 
+DEBUG = False
+
 if len(sys.argv)==2:
     if sys.argv[1]=='right':
         right_arm = True
@@ -58,32 +60,49 @@ except IOError:
 # Try connecting to the database. Exit if fail.
 #######################################################
 
-try:
-  db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db="triton")
-except MySQLdb.Error:
-  print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
-  sys.exit(1)
+if not DEBUG:
+    try:
+        db = MySQLdb.connect(host='halladb.jlab.org', user='triton', passwd='FakePassword', db="triton")
+    except MySQLdb.Error:
+        print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+    sys.exit(1)
+    try:
+        db2 = MySQLdb.connect(host='halladb.jlab.org', user='triton-user', passwd='FalsePw', db="triton-work")
+    except MySQLdb.Error:
+        print 'Could not connect to database. Please ensure that the paper runlist is kept up-to-date. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
 
 #######################################################
 # Ensure that the run number does not exist in the
 #   table already. Runnum is a unique key.
 #######################################################
 
-cursor = db.cursor()
-
-unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
-
-#Get number of entries with the current run number as a uniqueness test
-#Exit if not unique
-
-cursor.execute(unique_test)
-Evts = cursor.fetchall()
-evtAll = [Evt[0] for Evt in Evts]
-nEvtAll = len(evtAll)
-
-if nEvtAll>0:
-  print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
-  sys.exit(1)
+if not DEBUG:
+    cursor = db.cursor()
+    cursor2 = db.cursor()
+    
+    unique_test = "SELECT run_number FROM " + EXP + "runlist where run_number=" + runnum
+    
+    #Get number of entries with the current run number as a uniqueness test
+    #Exit if not unique
+    
+    cursor.execute(unique_test)
+    Evts = cursor.fetchall()
+    evtAll = [Evt[0] for Evt in Evts]
+    nEvtAll = len(evtAll)
+    
+    if nEvtAll>0:
+        print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
+    
+    cursor2.execute(unique_test)
+    Evts = cursor2.fetchall()
+    evtAll = [Evt[0] for Evt in Evts]
+    nEvtAll = len(evtAll)
+    
+    if nEvtAll>0:
+        print 'This run number is already in existence in the run_list. Please email Tyler Hague (tjhague@jlab.org) and include what run number this message appeared on.'
+        sys.exit(1)
 
 #######################################################
 # Interact with the caget script to access
@@ -287,8 +306,11 @@ insert_query += "\"" + comment + "\") "
 #######################################################
 # Execute the insert statment
 #######################################################
-
-cursor.execute(insert_query)
+if not DEBUG:
+    cursor.execute(insert_query)
+    cursor2.execute(insert_query)
+else:
+    print insert_query
 
 #print insert_query
 print 'Successfully inserted into the MySQL run list! Have an awesome shift!'
