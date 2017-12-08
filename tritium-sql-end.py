@@ -143,7 +143,7 @@ try:
                 elif c=='-' and fill:
                     triggers[i] = 'NULL'
                     fill = False
-                else:
+                elif (c==' ' and not triggers[i]=='') or (not c.isdigit() and not c==' '):
                     fill = False
             found_triggers = False
         elif line.startswith("APPROXIMATE BCM CHARGES"):
@@ -153,7 +153,7 @@ try:
             fill = False
             while i<len(line):
                 if line[i:i+6] == 'Unser:':
-                    i=i+7
+                    i=i+6
                     fill = True
                     charge = ''
                 elif (line[i].isdigit() or line[i]=='.') and fill:
