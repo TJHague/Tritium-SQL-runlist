@@ -133,6 +133,7 @@ raster_y = caget('EHAR_LIYWidth')
 beam_energy = caget('MMSHLAE')
 
 #Determine target from encoder value
+target = ''
 if abs(float(caget("haBDSPOS_0"))-target_encoder)<50.0:
     target = caget("haBDSSELECT.ZRST").rstrip()
 elif abs(float(caget("haBDSPOS_1"))-target_encoder)<50.0:
